@@ -29,9 +29,6 @@
     <ClInclude Include="States.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="Dispatcher.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="MPL.h">
       <Filter>头文件</Filter>
     </ClInclude>

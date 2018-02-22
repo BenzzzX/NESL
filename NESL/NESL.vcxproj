@@ -154,7 +154,6 @@
     <ClCompile Include="NESL.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Dispatcher.h" />
     <ClInclude Include="HBV.h" />
     <ClInclude Include="MPL.h" />
     <ClInclude Include="NESL.h" />
