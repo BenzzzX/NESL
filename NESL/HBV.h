@@ -1,9 +1,11 @@
 #pragma once
 #include <type_traits>
 #include <vector>
+#include <tuple>
+#include <array>
 namespace HBV
 {
-	using index_t = std::size_t;
+	using index_t = uint32_t;
 
 	constexpr index_t BitsPerLayer = 5u;
 	constexpr index_t LayerCount = 4u;
@@ -31,9 +33,9 @@ namespace HBV
 
 		void grow(index_t to)
 		{
-			_layer3.resize(index_of<3>(to));
-			_layer2.resize(index_of<2>(to));
-			_layer1.resize(index_of<1>(to));
+			_layer3.resize(index_of<3>(to) + 1);
+			_layer2.resize(index_of<2>(to) + 1);
+			_layer1.resize(index_of<1>(to) + 1);
 		}
 	public:
 		index_t layer0() const noexcept
@@ -90,10 +92,11 @@ namespace HBV
 
 
 				_layer0 &= !value_of<0>(id);
+				return true;
 			}
 		}
 
-		void clear()
+		void clear() noexcept
 		{
 			_layer3.clear();
 			_layer2.clear();
@@ -101,22 +104,41 @@ namespace HBV
 			_layer0 = 0u;
 		}
 
-		bool contain(index_t id)
+		bool contain(index_t id) const noexcept
 		{
 			index_t index_3 = index_of<3>(id);
-			return (index_3 < _layer3.size()) && (_layer3[index_3] & !value_of<3>(id));
+			return (index_3 < _layer3.size()) && (_layer3[index_3] & value_of<3>(id));
+		}
+
+		index_t layer(index_t level, index_t id) const noexcept
+		{
+			switch (level)
+			{
+			case 0: 
+				return layer0();
+			case 1: 
+				return layer1(id);
+			case 2: 
+				return layer2(id);
+			case 3: 
+				return layer3(id);
+			default:
+				return 0;
+			}
 		}
 	};
 
 	template<typename F,typename... Ts>
 	class bit_vector_composer
 	{
-		std::tuple<Ts&...> node;
+		const std::tuple<const Ts&...> _nodes;
+		F op;
 	public:
+		bit_vector_composer(F&& f, const Ts&... args) : op(std::forward<F>(f)), _nodes(args...) {}
 		template<index_t... i>
 		index_t compose_layer0(std::index_sequence<i...>) const noexcept
 		{
-			return F{}(std::get<i>(node).layer0()...);
+			return op(std::get<i>(_nodes).layer0()...);
 		}
 
 		index_t layer0() const noexcept
@@ -127,7 +149,7 @@ namespace HBV
 		template<index_t... i>
 		index_t compose_layer1(index_t id, std::index_sequence<i...>) const noexcept
 		{
-			return F{}(std::get<i>(node).layer1(id)...);
+			return op(std::get<i>(_nodes).layer1(id)...);
 		}
 
 		index_t layer1(index_t id) const noexcept
@@ -138,7 +160,7 @@ namespace HBV
 		template<index_t... i>
 		index_t compose_layer2(index_t id, std::index_sequence<i...>) const noexcept
 		{
-			return F{}(std::get<i>(node).layer2(id)...);
+			return op(std::get<i>(_nodes).layer2(id)...);
 		}
 
 		index_t layer2(index_t id) const noexcept
@@ -149,7 +171,7 @@ namespace HBV
 		template<index_t... i>
 		index_t compose_layer3(index_t id, std::index_sequence<i...>) const noexcept
 		{
-			return F{}(std::get<i>(node).layer3(id)...);
+			return op(std::get<i>(_nodes).layer3(id)...);
 		}
 
 		index_t layer3(index_t id) const noexcept
@@ -160,12 +182,96 @@ namespace HBV
 		template<index_t... i>
 		index_t compose_contain(index_t id, std::index_sequence<i...>) const noexcept
 		{
-			return F{}(std::get<i>(node).contain(id)...);
+			return op(std::get<i>(_nodes).contain(id)...);
 		}
 
 		index_t contain(index_t id) const noexcept
 		{
 			return compose_contain(id, std::make_index_sequence<sizeof...(Ts)>());
 		}
+
+		index_t layer(index_t level, index_t id) const noexcept
+		{
+			switch (level)
+			{
+			case 0:
+				return layer0();
+			case 1:
+				return layer1(id);
+			case 2:
+				return layer2(id);
+			case 3:
+				return layer3(id);
+			default:
+				return 0;
+			}
+		}
 	};
+
+
+	auto and_op = [](index_t a, index_t b) -> index_t
+	{
+		return a & b;
+	};
+
+	template<typename F, typename... Ts>
+	auto compose(F&& f, const Ts&... args)
+	{
+		return bit_vector_composer<F, Ts...>(std::forward<F>(f), args...);
+	}
+
+	auto or_op = [](index_t a, index_t b) -> index_t
+	{
+		return a | b;
+	};
+
+	auto not_op = [](index_t a)->index_t
+	{
+		return ~a;
+	};
+
+	index_t lowbit_pos(index_t id)
+	{
+
+		double d = id ^ (id - !!id);
+		return (((int*)&d)[1] >> 20) - 1023;
+	}
+
+	template<typename T, typename F>
+	void for_each(const T& vec, const F& f, std::false_type = {})
+	{
+		std::array<index_t, LayerCount> masks{};
+		masks[0] = vec.layer0();
+		std::array<index_t, LayerCount> prefix{};
+		while (true)
+		{
+			next:
+			for (int32_t level = LayerCount - 1; level >= 0; --level)
+			{
+				if (masks[level] == 0) continue;
+				index_t low = lowbit_pos(masks[level]);
+				masks[level] &= ~(1 << low);
+				index_t id = prefix[level] | low;
+				if (level == 3)
+				{
+					f(id);
+					goto next;
+				}
+				else
+				{
+					masks[level + 1] = vec.layer(level + 1, id);
+					prefix[level + 1] = id << BitsPerLayer;
+					goto next;
+				}
+			}
+			return;
+		}
+
+	}
+
+	template<typename T, typename F>
+	void for_each(const T& vec, const F& f, std::true_type)
+	{
+
+	}
 }
