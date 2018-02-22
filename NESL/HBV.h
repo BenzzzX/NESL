@@ -108,4 +108,64 @@ namespace HBV
 		}
 	};
 
+	template<typename F,typename... Ts>
+	class bit_vector_composer
+	{
+		std::tuple<Ts&...> node;
+	public:
+		template<index_t... i>
+		index_t compose_layer0(std::index_sequence<i...>) const noexcept
+		{
+			return F{}(std::get<i>(node).layer0()...);
+		}
+
+		index_t layer0() const noexcept
+		{
+			return compose_layer0(std::make_index_sequence<sizeof...(Ts)>());
+		}
+
+		template<index_t... i>
+		index_t compose_layer1(index_t id, std::index_sequence<i...>) const noexcept
+		{
+			return F{}(std::get<i>(node).layer1(id)...);
+		}
+
+		index_t layer1(index_t id) const noexcept
+		{
+			return compose_layer1(id, std::make_index_sequence<sizeof...(Ts)>());
+		}
+
+		template<index_t... i>
+		index_t compose_layer2(index_t id, std::index_sequence<i...>) const noexcept
+		{
+			return F{}(std::get<i>(node).layer2(id)...);
+		}
+
+		index_t layer2(index_t id) const noexcept
+		{
+			return compose_layer2(id, std::make_index_sequence<sizeof...(Ts)>());
+		}
+
+		template<index_t... i>
+		index_t compose_layer3(index_t id, std::index_sequence<i...>) const noexcept
+		{
+			return F{}(std::get<i>(node).layer3(id)...);
+		}
+
+		index_t layer3(index_t id) const noexcept
+		{
+			return compose_layer3(id, std::make_index_sequence<sizeof...(Ts)>());
+		}
+
+		template<index_t... i>
+		index_t compose_contain(index_t id, std::index_sequence<i...>) const noexcept
+		{
+			return F{}(std::get<i>(node).contain(id)...);
+		}
+
+		index_t contain(index_t id) const noexcept
+		{
+			return compose_contain(id, std::make_index_sequence<sizeof...(Ts)>());
+		}
+	};
 }
