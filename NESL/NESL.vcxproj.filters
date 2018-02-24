@@ -26,10 +26,16 @@
     <ClInclude Include="HBV.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="States.h">
+    <ClInclude Include="MPL.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="MPL.h">
+    <ClInclude Include="EntityState.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Entity.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="GlobalStates.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>

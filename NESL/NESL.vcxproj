@@ -154,10 +154,12 @@
     <ClCompile Include="NESL.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Entity.h" />
+    <ClInclude Include="EntityState.h" />
     <ClInclude Include="HBV.h" />
     <ClInclude Include="MPL.h" />
     <ClInclude Include="NESL.h" />
-    <ClInclude Include="States.h" />
+    <ClInclude Include="GlobalStates.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

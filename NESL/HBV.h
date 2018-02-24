@@ -30,14 +30,19 @@ namespace HBV
 		std::vector<index_t> _layer1;
 		std::vector<index_t> _layer2;
 		std::vector<index_t> _layer3;
+	public:
+		bit_vector(index_t max)
+		{
+			grow(max);
+		}
 
 		void grow(index_t to)
 		{
-			_layer3.resize(index_of<3>(to) + 1);
-			_layer2.resize(index_of<2>(to) + 1);
-			_layer1.resize(index_of<1>(to) + 1);
+			_layer3.resize(index_of<3>(to) + 1, 0u);
+			_layer2.resize(index_of<2>(to) + 1, 0u);
+			_layer1.resize(index_of<1>(to) + 1, 0u);
 		}
-	public:
+
 		index_t layer0() const noexcept
 		{
 			return _layer0;
@@ -65,7 +70,6 @@ namespace HBV
 
 			if (value)
 			{
-				if (index_3 >= _layer3.size()) grow(id);
 				if (_layer3[index_3] & value_3) return false;
 				if (_layer3[index_3] == EmptyNode)
 				{
@@ -79,19 +83,19 @@ namespace HBV
 			else
 			{
 				if (index_3 >= _layer3.size()) return false;
-				_layer3[index_3] &= !value_3;
+				_layer3[index_3] &= ~value_3;
 				if (_layer3[index_3] != EmptyNode) return true;
 
 				index_t index_2 = index_of<2>(id);
-				_layer2[index_2] &= !value_of<2>(id);
+				_layer2[index_2] &= ~value_of<2>(id);
 				if (_layer2[index_2] != EmptyNode) return true;
 
 				index_t index_1 = index_of<1>(id);
-				_layer1[index_1] &= !value_of<1>(id);
+				_layer1[index_1] &= ~value_of<1>(id);
 				if (_layer1[index_1] != EmptyNode) return true;
 
 
-				_layer0 &= !value_of<0>(id);
+				_layer0 &= ~value_of<0>(id);
 				return true;
 			}
 		}
@@ -208,10 +212,32 @@ namespace HBV
 		}
 	};
 
-
-	auto and_op = [](index_t a, index_t b) -> index_t
+	
+	struct and_op_t
 	{
-		return a & b;
+		template<typename... Ts>
+		index_t operator()(Ts... args)
+		{
+			return (args & ...);
+		}
+	};
+
+	struct or_op_t
+	{
+		template<typename... Ts>
+		index_t operator()(Ts... args)
+		{
+			return (args | ...);
+		}
+	};
+
+	auto and_op = and_op_t{};
+
+	auto or_op = and_op_t{};
+
+	auto not_op = [](index_t a)->index_t
+	{
+		return ~a;
 	};
 
 	template<typename F, typename... Ts>
@@ -220,16 +246,6 @@ namespace HBV
 		return bit_vector_composer<F, Ts...>(std::forward<F>(f), args...);
 	}
 
-	auto or_op = [](index_t a, index_t b) -> index_t
-	{
-		return a | b;
-	};
-
-	auto not_op = [](index_t a)->index_t
-	{
-		return ~a;
-	};
-
 	index_t lowbit_pos(index_t id)
 	{
 
@@ -237,8 +253,14 @@ namespace HBV
 		return (((int*)&d)[1] >> 20) - 1023;
 	}
 
-	template<typename T, typename F>
-	void for_each(const T& vec, const F& f, std::false_type = {})
+	template<typename T>
+	bool empty(const T& vec)
+	{
+		return vec.layer0() == 0u;
+	}
+
+	template<bool controll = false, typename T, typename F>
+	void for_each(const T& vec, const F& f)
 	{
 		std::array<index_t, LayerCount> masks{};
 		masks[0] = vec.layer0();
@@ -254,8 +276,15 @@ namespace HBV
 				index_t id = prefix[level] | low;
 				if (level == 3)
 				{
-					f(id);
-					goto next;
+					if constexpr(controll)
+					{
+						if (!f(id)) return;
+					}
+					else
+					{
+						f(id);
+						goto next;
+					}
 				}
 				else
 				{
@@ -266,12 +295,5 @@ namespace HBV
 			}
 			return;
 		}
-
-	}
-
-	template<typename T, typename F>
-	void for_each(const T& vec, const F& f, std::true_type)
-	{
-
 	}
 }
