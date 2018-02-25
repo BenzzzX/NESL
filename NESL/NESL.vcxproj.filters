@@ -44,5 +44,11 @@
     <ClInclude Include="GlobalState.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Dispather.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="Parallel.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

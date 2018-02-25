@@ -365,6 +365,7 @@ namespace HBV
 		return vec.layer0() == 0u;
 	}
 
+
 	template<bool controll = false, typename T, typename F>
 	void for_each(const T& vec, const F& f)
 	{

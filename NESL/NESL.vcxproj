@@ -154,6 +154,7 @@
     <ClCompile Include="NESL.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Dispather.h" />
     <ClInclude Include="Entity.h" />
     <ClInclude Include="EntityState.h" />
     <ClInclude Include="GlobalState.h" />
@@ -161,6 +162,7 @@
     <ClInclude Include="LogicGraph.h" />
     <ClInclude Include="MPL.h" />
     <ClInclude Include="NESL.h" />
+    <ClInclude Include="Parallel.h" />
     <ClInclude Include="States.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
