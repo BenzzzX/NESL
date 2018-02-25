@@ -15,14 +15,19 @@ namespace ESL
 		template<typename... Ts>
 		EntityState(Ts... args) : _container(args...) {}
 
-		HBV::bit_vector &Available()
+		T& Raw()
 		{
-			return _entity;
+			return _container;
 		}
 
-		EntityState &Raw()
+		const T& Raw() const
 		{
-			return *this;
+			return _container;
+		}
+
+		const HBV::bit_vector &Available() const
+		{
+			return _entity;
 		}
 
 		auto &Get(Entity e)

@@ -47,12 +47,12 @@ namespace ESL
 			Grow(_generation.size() * 2u);
 		}
 
-		HBV::bit_vector& Available()
+		const HBV::bit_vector& Available() const
 		{
 			return _alive;
 		}
 
-		Entity Get(index_t i)
+		Entity Get(index_t i) const
 		{
 			return { i, _generation[i] };
 		}

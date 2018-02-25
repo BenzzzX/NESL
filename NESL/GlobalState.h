@@ -14,6 +14,11 @@ namespace ESL
 		{
 			return _singleton;
 		}
+
+		const T &Raw() const
+		{
+			return _singleton;
+		}
 	};
 }
 

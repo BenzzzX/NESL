@@ -14,6 +14,9 @@ namespace ESL
 	template<typename T>
 	using State = typename TState<T>::type;
 
+	template<>
+	struct TState<Entity> { using type = GlobalState<GEntities>; };
+
 	class States
 	{
 		std::unordered_map<std::size_t, std::any> _states;
@@ -27,7 +30,7 @@ namespace ESL
 
 		void Tick()
 		{
-			GEntities &entities = *Get<GEntities>();
+			GEntities &entities = Get<GEntities>()->Raw();
 			entities.MergeWith([this](Entity e)
 			{
 				for (auto &f : _onEntityDie)
@@ -42,20 +45,12 @@ namespace ESL
 			using ST = State<T>;
 			auto it = _states.find(typeid(ST).hash_code());
 			//for return type derivation
-			auto ptr = &std::any_cast<ST&>(it->second).Raw();
+			auto ptr = &std::any_cast<ST&>(it->second);
 			if (it != _states.end())
 				return ptr;
 			return (ptr = nullptr);
 		}
 
-		template<typename T>
-		bool Valid() const noexcept
-		{
-			auto it = _states.find(typeid(T).hash_code());
-			if (it == _states.end())
-				return false;
-			return true;
-		}
 	private:
 		template<typename T>
 		void RegisterEntityDie(T& any) {}
@@ -73,7 +68,7 @@ namespace ESL
 		auto &Create(Ts... args) noexcept
 		{
 			using ST = State<T>;
-			auto &state = std::any_cast<ST&>(_states.insert({ typeid(ST).hash_code(), std::any{ ST{ args... } } }).first->second).Raw();
+			auto &state = std::any_cast<ST&>(_states.insert({ typeid(ST).hash_code(), std::any{ ST{ args... } } }).first->second);
 			RegisterEntityDie(state);
 			return state;
 		}

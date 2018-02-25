@@ -15,7 +15,21 @@ namespace MPL {
 	template <template <typename...> class TNewName, typename T>
 	using rewrap_t = typename rewrap<TNewName, T>::type;
 
+	
+
 	template <typename... Ts> struct typelist {};
+
+	template<typename T>
+	struct unwrap { using type = T; };
+
+	//template<template<typename...> class V, typename... T>
+	//struct unwrap<V<T...>> { using type = typelist<T...>; };
+
+	template<template<typename> class V, typename T>
+	struct unwrap<V<T>> { using type = T; };
+
+	template<typename T>
+	using unwrap_t = typename unwrap<T>::type;
 
 	template <typename T> struct type_t { using type = T; };
 
@@ -180,5 +194,63 @@ namespace MPL {
 	template <typename T, typename F> constexpr decltype(auto) for_types(F &&f) {
 		if constexpr (size<T>{} > 0u)
 			return for_tuple(rewrap_t<std::tuple, map_t<type_t, T>>{}, f);
+	}
+
+	template<typename T>
+	struct remove_const { using type = std::remove_const_t<T>; };
+
+	template<typename T>
+	struct remove_const<T const&> { using type = T & ; };
+
+	template<typename T>
+	struct remove_const<T const&&> { using type = T && ; };
+
+	template<typename T>
+	using remove_const_t = typename remove_const<T>::type;
+
+	template<typename T>
+	struct add_const { using type = std::add_const_t<T>; };
+
+	template<typename T>
+	struct add_const<T &> { using type = T const& ; };
+
+	template<typename T>
+	struct add_const<T &&> { using type = T const&& ; };
+
+	template<typename T>
+	using add_const_t = typename add_const<T>::type;
+
+	template<typename T>
+	struct is_const : std::is_const<T> { };
+
+	template<typename T>
+	struct is_const<T const&> : std::true_type { };
+
+	template<typename T>
+	struct is_const<T const&&> : std::true_type { };
+
+	template<typename T>
+	constexpr bool is_const_v = is_const<T>::value;
+
+	template<typename T, typename C>
+	static constexpr decltype(auto) nonstrict_get(C& c)
+	{
+		using nonstrict_type = std::conditional_t
+		<
+			MPL::contain_v
+			<
+				remove_const_t<T>,
+				MPL::rewrap_t<MPL::typelist, C>
+			>,
+			remove_const_t<T>,
+			T
+		>;
+		return std::get<nonstrict_type>(c);
+	}
+
+	template<typename T>
+	const char* type_name()
+	{
+		return typeid(type_t<T>).name();
 	}
 }
