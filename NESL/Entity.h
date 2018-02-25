@@ -2,6 +2,7 @@
 #include <vector>
 #include <optional>
 #include "HBV.h"
+
 namespace ESL
 {
 	using Generation = uint32_t;
@@ -16,22 +17,21 @@ namespace ESL
 	class GEntities
 	{
 		std::vector<Generation> _generation;
+		HBV::bit_vector _dead;
 		HBV::bit_vector _alive;
-		HBV::bit_vector _rised;
 		HBV::bit_vector _killed;
 
 		void Grow(index_t to)
 		{
-			_alive.grow(to);
+			_dead.grow(to, true);
 			_generation.resize(to, 0u);
-			_rised.grow(to);
+			_killed.grow(to);
+			_alive.grow(to);
 		}
 
 		auto GetFree()
 		{
 			std::optional<index_t> id{};
-			auto _notdead = HBV::compose(HBV::or_op, _alive, _rised);
-			auto _dead = HBV::compose(HBV::not_op, _notdead);
 			HBV::for_each<true>(_dead, [&id](index_t i)
 			{
 				id.emplace(i);
@@ -40,14 +40,21 @@ namespace ESL
 			return id;
 		}
 	public:
-		GEntities() : _generation(10000u), _alive(10000u), _rised(10000u), _killed(10000u)
-		{
-
-		}
+		GEntities() : _generation(10000u), _dead(10000u, true), _killed(10000u), _alive(10000u) {}
 
 		void Grow()
 		{
 			Grow(_generation.size() * 2u);
+		}
+
+		HBV::bit_vector& Available()
+		{
+			return _alive;
+		}
+
+		Entity Get(index_t i)
+		{
+			return { i, _generation[i] };
 		}
 
 		std::optional<Entity> TrySpawn()
@@ -55,7 +62,8 @@ namespace ESL
 			auto id = GetFree();
 			if (!id.has_value()) return{};
 			Generation &g = _generation[id.value()];
-			_rised.set(id.value(), true);
+			_dead.set(id.value(), false);
+			_alive.set(id.value(), true);
 			return Entity{ id.value(), g+1 };
 		}
 
@@ -65,21 +73,25 @@ namespace ESL
 				&& _alive.contain(e.id);
 		}
 
+		template<typename F>
+		void MergeWith(F&& f)
+		{
+			HBV::for_each(_killed, [this, &f](index_t i)
+			{
+				bool kill = f(Entity{ i, _generation[i] });
+				_dead.set(i, kill);
+				_alive.set(i, !kill);
+			});
+			_killed.clear();
+		}
+
 		void Merge()
 		{
-			HBV::for_each(_rised, [this](index_t i)
-			{
-				_alive.set(i, true);
-				Generation &g = _generation[i];
-				g += 1;
-			});
-
 			HBV::for_each(_killed, [this](index_t i)
 			{
+				_dead.set(i, true);
 				_alive.set(i, false);
 			});
-
-			_rised.clear();
 			_killed.clear();
 		}
 

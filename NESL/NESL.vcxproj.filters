@@ -35,7 +35,13 @@
     <ClInclude Include="Entity.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="GlobalStates.h">
+    <ClInclude Include="States.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="LogicGraph.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="GlobalState.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
