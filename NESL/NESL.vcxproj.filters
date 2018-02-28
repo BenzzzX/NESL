@@ -50,5 +50,11 @@
     <ClInclude Include="Parallel.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="vector.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="small_vector.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

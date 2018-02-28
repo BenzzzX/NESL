@@ -10,9 +10,6 @@ namespace ESL
 		using unwrap2_t = MPL::unwrap_t<MPL::unwrap_t<T>>;
 
 		template<typename T>
-		struct IsEntityStateContainer : std::is_same<EntityState<T>, State<MPL::unwrap_t<T>>> {};
-
-		template<typename T>
 		struct IsEntityState : std::is_same<T, EntityState<MPL::unwrap_t<T>>> {};
 
 		template<typename T>
@@ -22,7 +19,7 @@ namespace ESL
 		struct IsGlobalState : std::is_same<T, GlobalState<MPL::unwrap_t<T>>> {};
 
 		template<typename T>
-		using IsRawGlobalState = std::conjunction<IsGlobalState<State<T>>, std::negation<IsEntityStateContainer<T>>>;
+		using IsRawGlobalState = std::conjunction<IsGlobalState<State<T>>>;
 
 		template<typename... Ts>
 		struct ComposeHelper
@@ -30,7 +27,7 @@ namespace ESL
 			template<typename S>
 			static auto ComposeBitVector(S &states)
 			{
-				return HBV::compose(HBV::and_op, std::get<GlobalState<GEntities>&>(states).Raw().Available(), std::get<Ts&>(states).Available()...);
+				return HBV::compose(HBV::and_op, MPL::nonstrict_get<const GlobalState<GEntities>&>(states).Raw().Available(), MPL::nonstrict_get<const Ts&>(states).Available()...);
 			}
 		};
 		template<typename T>
@@ -49,7 +46,7 @@ namespace ESL
 				auto &state = MPL::nonstrict_get<WrapT&>(states);
 
 				Entity e = MPL::nonstrict_get<WrapState<const GEntities>&>(states).Raw().Get(id);
-				return state.Get(e);
+				return *state.Get(e);
 			}
 
 			template<typename T, typename S>
@@ -66,11 +63,15 @@ namespace ESL
 				{
 					auto &state = MPL::nonstrict_get<WrapT&>(states);
 
-					if constexpr(IsEntityStateContainer<DecayT>{} || IsRawGlobalState<DecayT>{})
+					if constexpr(IsEntityState<DecayT>{})
+					{
+						return state;
+					}
+					else if constexpr(IsRawGlobalState<DecayT>{})
 					{
 						return state.Raw();
 					}
-					else //if constexpr(IsGlobalState<T>{})
+					else //if constexpr(IsGlobalState<DecayT>{})
 					{
 						return state;
 					}
@@ -90,7 +91,13 @@ namespace ESL
 			template<typename T, typename S>
 			static auto& Take(S &states)
 			{
-				return MPL::nonstrict_get<WrapState<T>&>(states);
+				auto& state = MPL::nonstrict_get<WrapState<T>&>(states);
+				if constexpr(IsRawGlobalState<std::decay_t<T>>{})
+				{
+					return state.Raw();
+				}
+				else
+					return state;
 			}
 
 			template<typename F, typename S>
@@ -128,7 +135,7 @@ namespace ESL
 		template<typename T>
 		struct FxxkMSVC<T>
 		{
-			using type = MPL::typelist<WrapState<T>>;
+			using type = MPL::typelist<WrapState<T>, const GlobalState<GEntities>>;
 		};
 
 		template<typename S>

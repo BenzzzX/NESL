@@ -30,14 +30,14 @@ namespace ESL
 			return _entity;
 		}
 
-		auto &Get(Entity e)
+		auto *Get(Entity e)
 		{
-			return _container.Get(e);
+			return Contain(e) ? &_container.Get(e) : nullptr;
 		}
 
-		const auto &Get(Entity e) const
+		const auto *Get(Entity e) const
 		{
-			return _container.Get(e);
+			return Contain(e) ? &_container.Get(e) : nullptr;
 		}
 
 		template<typename... Ts>
@@ -45,17 +45,21 @@ namespace ESL
 		{
 			if (_entity.size() <= e.id)
 				_entity.grow(e.id + 1);
-			_entity.set(e.id, true);
+			if (Contain(e))
+				_container.Remove(e);
+			else
+				_entity.set(e.id, true);
 			return _container.Create(e, std::forward<Ts>(args)...);
 		}
 
-		bool Contain(Entity e)
+		bool Contain(Entity e) const
 		{
 			return _entity.contain(e.id);
 		}
 
 		void Remove(Entity e)
 		{
+			if (!Contain(e)) return;
 			_entity.set(e.id, false);
 			_container.Remove(e);
 		}
@@ -144,7 +148,7 @@ namespace ESL
 	{
 		uvector<T> _states;
 		HBV::bit_vector _empty;
-		std::vector<index_t> _redirector; 
+		lni::vector<index_t> _redirector; 
 		
 		auto GetFree()
 		{

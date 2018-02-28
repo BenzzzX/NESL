@@ -1,13 +1,15 @@
 #pragma once
 #include <type_traits>
-#include <vector>
+#include "vector.h"
 #include <tuple>
 #include <array>
+#include "small_vector.h"
+
 namespace HBV
 {
 	using index_t = uint32_t;
 
-	constexpr index_t BitsPerLayer = 5u;
+	constexpr index_t BitsPerLayer = 6u;
 	constexpr index_t LayerCount = 4u;
 
 	//node index
@@ -41,9 +43,9 @@ namespace HBV
 	class bit_vector
 	{
 		index_t _layer0;
-		std::vector<index_t> _layer1;
-		std::vector<index_t> _layer2;
-		std::vector<index_t> _layer3;
+		chobo::small_vector<index_t> _layer1;
+		lni::vector<index_t> _layer2;
+		lni::vector<index_t> _layer3;
 	public:
 		bit_vector(index_t max, bool fill = false) noexcept
 		{
@@ -284,8 +286,8 @@ namespace HBV
 		const T& _node;
 		/*
 		index_t _layer0;
-		std::vector<index_t> _layer1;
-		std::vector<index_t> _layer2;
+		lni::vector<index_t> _layer1;
+		lni::vector<index_t> _layer2;
 		*/
 	public:
 

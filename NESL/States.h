@@ -20,7 +20,7 @@ namespace ESL
 	class States
 	{
 		std::unordered_map<std::size_t, std::any> _states;
-		std::vector<std::function<void(Entity)>> _onEntityDie;
+		lni::vector<std::function<void(Entity)>> _onEntityDie;
 		
 	public:
 		States()

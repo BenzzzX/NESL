@@ -1,5 +1,5 @@
 #pragma once
-#include <vector>
+#include "vector.h"
 #include <optional>
 #include "HBV.h"
 
@@ -16,7 +16,7 @@ namespace ESL
 
 	class GEntities
 	{
-		std::vector<Generation> _generation;
+		lni::vector<Generation> _generation;
 		HBV::bit_vector _dead;
 		HBV::bit_vector _alive;
 		HBV::bit_vector _killed;
