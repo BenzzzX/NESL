@@ -44,11 +44,7 @@ namespace ESL
 		{
 			using ST = State<T>;
 			auto it = _states.find(typeid(ST).hash_code());
-			//for return type derivation
-			auto ptr = &std::any_cast<ST&>(it->second);
-			if (it != _states.end())
-				return ptr;
-			return (ptr = nullptr);
+			return it != _states.end()? &std::any_cast<ST&>(it->second) : nullptr;
 		}
 
 	private:

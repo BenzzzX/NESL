@@ -45,7 +45,7 @@ namespace ESL
 				using WrapT = WrapState<T>;
 				auto &state = MPL::nonstrict_get<WrapT&>(states);
 
-				Entity e = MPL::nonstrict_get<WrapState<const GEntities>&>(states).Raw().Get(id);
+				Entity e = MPL::nonstrict_get<const GlobalState<GEntities>&>(states).Raw().Get(id);
 				return *state.Get(e);
 			}
 
@@ -57,7 +57,7 @@ namespace ESL
 
 				if constexpr(std::is_same<T, Entity>{})
 				{
-					return MPL::nonstrict_get<WrapState<const GEntities>&>(states).Raw().Get(id);
+					return MPL::nonstrict_get<const GlobalState<GEntities>&>(states).Raw().Get(id);
 				}
 				else
 				{
@@ -187,6 +187,17 @@ namespace ESL
 			{
 				MPL::rewrap_t<Dispatcher::EntityDispatchHelper, Argument>::Dispatch(states, i, logic);
 			});
+		}
+	}
+
+	template<typename F, typename S>
+	void DispatchEntity(S states, F&& logic, Entity e)
+	{
+		using Trait = MPL::generic_function_trait<std::decay_t<F>>;
+		using Argument = typename Trait::argument_type;
+		if (MPL::nonstrict_get<const GlobalState<GEntities>&>(states).Raw().Alive(e))
+		{
+			MPL::rewrap_t<Dispatcher::EntityDispatchHelper, Argument>::Dispatch(states, e.id, logic);
 		}
 	}
 
