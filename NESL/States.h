@@ -21,17 +21,14 @@ namespace ESL
 	{
 		std::unordered_map<std::size_t, std::any> _states;
 		lni::vector<std::function<void(Entity)>> _onEntityDie;
+		GlobalState<GEntities>& _entities;
 		
 	public:
-		States()
-		{
-			Create<GEntities>();
-		}
+		States() : _entities(Create<GEntities>()){}
 
 		void Tick()
 		{
-			GEntities &entities = Get<GEntities>()->Raw();
-			entities.MergeWith([this](Entity e)
+			_entities.Raw().MergeWith([this](Entity e)
 			{
 				for (auto &f : _onEntityDie)
 					f(e);
@@ -39,13 +36,27 @@ namespace ESL
 			});
 		}
 
+		auto& Entities()
+		{
+			return _entities.Raw();
+		}
+
 		template<typename T>
 		auto* Get() noexcept
 		{
-			using ST = State<T>;
-			auto it = _states.find(typeid(ST).hash_code());
-			return it != _states.end()? &std::any_cast<ST&>(it->second) : nullptr;
+			if constexpr(std::is_same_v<GEntities, T>)
+			{
+				return &_entities;
+			}
+			else
+			{
+				using ST = State<T>;
+				auto it = _states.find(typeid(ST).hash_code());
+				return it != _states.end() ? &std::any_cast<ST&>(it->second) : nullptr;
+			}
 		}
+
+
 
 	private:
 		template<typename T>
