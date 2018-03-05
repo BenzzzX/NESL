@@ -27,7 +27,7 @@ namespace ESL
 			template<typename S>
 			static auto ComposeBitVector(S &states)
 			{
-				return HBV::compose(HBV::and_op, MPL::nonstrict_get<const GlobalState<GEntities>&>(states).Raw().Available(), MPL::nonstrict_get<const Ts&>(states).Available()...);
+				return HBV::compose(HBV::and_op, MPL::nonstrict_get<const GlobalState<Entities>&>(states).Raw().Available(), MPL::nonstrict_get<const Ts&>(states).Available()...);
 			}
 		};
 		template<typename T>
@@ -45,7 +45,7 @@ namespace ESL
 				using WrapT = WrapState<T>;
 				auto &state = MPL::nonstrict_get<WrapT&>(states);
 
-				Entity e = MPL::nonstrict_get<const GlobalState<GEntities>&>(states).Raw().Get(id);
+				Entity e = MPL::nonstrict_get<const GlobalState<Entities>&>(states).Raw().Get(id);
 				return *state.Get(e);
 			}
 
@@ -57,7 +57,7 @@ namespace ESL
 
 				if constexpr(std::is_same<T, Entity>{})
 				{
-					return MPL::nonstrict_get<const GlobalState<GEntities>&>(states).Raw().Get(id);
+					return MPL::nonstrict_get<const GlobalState<Entities>&>(states).Raw().Get(id);
 				}
 				else
 				{
@@ -135,7 +135,7 @@ namespace ESL
 		template<typename T>
 		struct FxxkMSVC<T>
 		{
-			using type = MPL::typelist<WrapState<T>, const GlobalState<GEntities>>;
+			using type = MPL::typelist<WrapState<T>, WrapState<GEntities>>;
 		};
 
 		template<typename S>
@@ -195,7 +195,7 @@ namespace ESL
 	{
 		using Trait = MPL::generic_function_trait<std::decay_t<F>>;
 		using Argument = typename Trait::argument_type;
-		if (MPL::nonstrict_get<const GlobalState<GEntities>&>(states).Raw().Alive(e))
+		if (MPL::nonstrict_get<const GlobalState<Entities>&>(states).Raw().Alive(e))
 		{
 			MPL::rewrap_t<Dispatcher::EntityDispatchHelper, Argument>::Dispatch(states, e.id, logic);
 		}

@@ -14,7 +14,7 @@ namespace ESL
 		Generation generation;
 	};
 
-	class GEntities
+	class Entities
 	{
 		lni::vector<Generation> _generation;
 		HBV::bit_vector _dead;
@@ -40,7 +40,7 @@ namespace ESL
 			return id;
 		}
 	public:
-		GEntities() : _generation(10000u), _dead(10000u, true), _killed(10000u), _alive(10000u) {}
+		Entities() : _generation(10000u), _dead(10000u, true), _killed(10000u), _alive(10000u) {}
 
 		void Grow()
 		{
@@ -57,17 +57,18 @@ namespace ESL
 			return { i, _generation[i] };
 		}
 
-		std::optional<Entity> TrySpawn()
+		std::optional<Entity> TrySpawn() const
 		{
-			auto id = GetFree();
+			Entities* mutableThis = const_cast<Entities*>(this);
+			auto id = mutableThis->GetFree();
 			if (!id.has_value()) return{};
-			Generation &g = _generation[id.value()];
-			_dead.set(id.value(), false);
-			_alive.set(id.value(), true);
+			Generation &g = mutableThis->_generation[id.value()];
+			mutableThis->_dead.set(id.value(), false);
+			mutableThis->_alive.set(id.value(), true);
 			return Entity{ id.value(), g+1 };
 		}
 
-		bool Alive(Entity e)
+		bool Alive(Entity e) const
 		{
 			return _generation[e.id] == e.generation
 				&& _alive.contain(e.id);
@@ -95,9 +96,12 @@ namespace ESL
 			_killed.clear();
 		}
 
-		void Kill(Entity e)
+		void Kill(Entity e) const
 		{
-			_killed.set(e.id, true);
+			Entities* mutableThis = const_cast<Entities*>(this);
+			mutableThis->_killed.set(e.id, true);
 		}
 	};
+
+	using GEntities = const Entities;
 }

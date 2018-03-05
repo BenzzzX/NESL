@@ -15,16 +15,16 @@ namespace ESL
 	using State = typename TState<T>::type;
 
 	template<>
-	struct TState<Entity> { using type = GlobalState<GEntities>; };
+	struct TState<Entity> { using type = GlobalState<Entities>; };
 
 	class States
 	{
 		std::unordered_map<std::size_t, std::any> _states;
-		lni::vector<std::function<void(Entity)>> _onEntityDie;
-		GlobalState<GEntities>& _entities;
+		std::vector<std::function<void(Entity)>> _onEntityDie;
+		GlobalState<ESL::Entities>& _entities;
 		
 	public:
-		States() : _entities(Create<GEntities>()){}
+		States() : _entities(Create<ESL::Entities>()){}
 
 		void Tick()
 		{
@@ -65,7 +65,7 @@ namespace ESL
 		template<typename T>
 		void RegisterEntityDie(EntityState<T>& state)
 		{
-			_onEntityDie.push_back([&state](Entity e)
+			_onEntityDie.emplace_back([&state](Entity e)
 			{
 				state.Remove(e);
 			});

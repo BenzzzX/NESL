@@ -47,12 +47,20 @@ namespace ESL
 
 			chobo::small_vector<LogicNode*, 8> _successors;
 			std::unordered_set<LogicNode*> _manualSuccessors;
+			std::unordered_set<LogicNode*> _implicitSuccessors;
 			tbb::flow::continue_node<tbb::flow::continue_msg>* _graphNode;
 			std::string _name;
 			int _refcount = 0;
 			friend LogicGraphBuilder;
+
 		public:
 			chobo::small_vector<std::string, 8> dependencies;
+
+			template<typename... Ts>
+			void Depends(Ts&&... args)
+			{
+				std::initializer_list<int> _{ (dependencies.push_back(std::forward<Ts>(args)),0)... };
+			}
 		};
 
 		struct StateInfo
@@ -100,13 +108,14 @@ namespace ESL
 			}
 		}
 
-		void AddSuccessor(LogicNode* node, LogicNode* succ, std::size_t id)
+		void AddSuccessor(LogicNode* node, LogicNode* succ, std::size_t id, bool implicit = false)
 		{
 			auto &succs = node->_successors;
 			if (std::find(succs.begin(), succs.end(), succ) == succs.end())
 			{
 				std::cerr << "Implicit dependency between [" << succ->_name.c_str() << "] and [" << node->_name.c_str() << "] due to conflict on state ["<< _stateInfos[id]._name <<"].\n";
-				succs.push_back(succ);
+				succs.push_back(succ); 
+				if (implicit) node->_implicitSuccessors.insert(succ);
 			}
 			else
 			{
@@ -118,20 +127,29 @@ namespace ESL
 		void ImplicitDependency()
 		{
 			std::queue<LogicNode*> searching;
-			std::unordered_map<std::size_t, StateNode*> states;
+			std::unordered_map<std::size_t, std::size_t> states;
 
 			for (auto &node : _entry)
 				searching.push(node);
 
+			std::size_t nodeSize = _stateInfos.size();
+			for (auto& logicPair : _logicNodes)
+			{
+				auto& logic = logicPair.second;
+				nodeSize += logic._writes.size();
+			}
+			_stateNodes.reserve(nodeSize);
+
 			for (auto &it : _stateInfos)
 			{
-				StateNode state;
+				_stateNodes.emplace_back();
+				StateNode &state = _stateNodes.back();
 				state._version = 0;
 				state._id = it.first;
 				state._writer = nullptr;
 				state._owner = nullptr;
-				_stateNodes.emplace_back(std::move(state));
-				states[it.first] = &_stateNodes.back();
+				state._readers.clear();
+				states[it.first] = _stateNodes.size() - 1;
 			}
 
 			_flattenNodes.reserve(_logicNodes.size());
@@ -151,29 +169,31 @@ namespace ESL
 
 				for (auto &read : node->_reads)
 				{
-
-					StateNode *&sn = states[read];
-					sn->_readers.push_back(node);
-					if(sn->_writer)
-						AddSuccessor(sn->_writer, node, read);
+					std::size_t &id = states[read];
+					StateNode &sn = _stateNodes[id];
+					sn._readers.push_back(node);
+					if(sn._writer)
+						AddSuccessor(sn._writer, node, read);
 				}
 
 				for (auto &write : node->_writes)
 				{
-					StateNode *&sn = states[write];
-					for (auto &reader : sn->_readers)
-						AddSuccessor(reader, node, write);
-					if (sn->_writer)
-						AddSuccessor(sn->_writer, node, write);
-					sn->_owner = node;
-					StateNode state;
-					state._version = sn->_version + 1;
-					state._id = sn->_id;
-					state._writer = node;
-					_stateNodes.emplace_back(std::move(state));
-					sn = &_stateNodes.back();
-						
+					std::size_t &id = states[write];
+					StateNode &sn = _stateNodes[id];
+					for (auto &reader : sn._readers)
+						AddSuccessor(reader, node, write, true);
+					if (sn._writer)
+						AddSuccessor(sn._writer, node, write);
+					sn._owner = node;
 
+					_stateNodes.emplace_back();
+					StateNode &state = _stateNodes.back();
+					state._version = sn._version + 1;
+					state._id = sn._id;
+					state._writer = node;
+					state._owner = nullptr;
+					state._readers.clear();
+					id = _stateNodes.size() - 1;
 				}
 			}
 		}
@@ -276,12 +296,21 @@ namespace ESL
 					stream << "\"" << l->_name << "\" ";
 					stream << "} [color=white]\n";
 				}
+
+				for (auto& l : logic._implicitSuccessors)
+				{
+					stream << "\"" << logic._name << "\" -> { ";
+					stream << "\"" << l->_name << "\" ";
+					stream << "} [color=yellow3]\n";
+				}
 			}
 
 			stream << "\n";
 
 			for (auto& state : _stateNodes)
 			{
+				if (state._readers.empty() && state._owner == nullptr) continue;
+				//if (state._id == typeid(GlobalState<Entities>).hash_code()) continue;
 				const StateInfo &info = _stateInfos[state._id];
 				const char* name = info._name;
 				stream << "\"" << name << state._version << "\" [label=\"" << name << "\", style=filled, fillcolor= " << (info._isGlobal ? "skyblue" : "steelblue") << "]\n";
