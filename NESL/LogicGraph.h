@@ -310,7 +310,7 @@ namespace ESL
 			for (auto& state : _stateNodes)
 			{
 				if (state._readers.empty() && state._owner == nullptr) continue;
-				//if (state._id == typeid(GlobalState<Entities>).hash_code()) continue;
+				if (state._id == typeid(GlobalState<Entities>).hash_code()) continue;
 				const StateInfo &info = _stateInfos[state._id];
 				const char* name = info._name;
 				stream << "\"" << name << state._version << "\" [label=\"" << name << "\", style=filled, fillcolor= " << (info._isGlobal ? "skyblue" : "steelblue") << "]\n";

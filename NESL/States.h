@@ -15,7 +15,7 @@ namespace ESL
 	using State = typename TState<T>::type;
 
 	template<>
-	struct TState<Entity> { using type = GlobalState<Entities>; };
+	struct TState<Entity> { using type = const GlobalState<Entities>; };
 
 	class States
 	{
