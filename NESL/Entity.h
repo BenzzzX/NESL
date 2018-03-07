@@ -57,14 +57,13 @@ namespace ESL
 			return { i, _generation[i] };
 		}
 
-		std::optional<Entity> TrySpawn() const
+		std::optional<Entity> TrySpawn()
 		{
-			Entities* mutableThis = const_cast<Entities*>(this);
-			auto id = mutableThis->GetFree();
+			auto id = GetFree();
 			if (!id.has_value()) return{};
-			Generation &g = mutableThis->_generation[id.value()];
-			mutableThis->_dead.set(id.value(), false);
-			mutableThis->_alive.set(id.value(), true);
+			Generation &g = _generation[id.value()];
+			_dead.set(id.value(), false);
+			_alive.set(id.value(), true);
 			return Entity{ id.value(), g+1 };
 		}
 
@@ -103,5 +102,4 @@ namespace ESL
 		}
 	};
 
-	using GEntities = const Entities;
 }

@@ -4,23 +4,18 @@
 
 namespace ESL
 {
+
+	template<typename T>
+	struct IsRawState : std::is_same<typename TStateTrait<StateNonstrict<T>>::Raw, T> {};
+
+	template<typename T>
+	struct IsEntityState : std::is_same<typename TStateTrait<StateNonstrict<T>>::Type, TEntityState> {};
+
+	template<typename T>
+	struct IsRawEntityState : std::conjunction<IsRawState<T>, IsEntityState<T>> {};
+
 	class Dispatcher
 	{
-		template<typename T>
-		using unwrap2_t = MPL::unwrap_t<MPL::unwrap_t<T>>;
-
-		template<typename T>
-		struct IsEntityState : std::is_same<T, EntityState<MPL::unwrap_t<T>>> {};
-
-		template<typename T>
-		using IsRawEntityState = IsEntityState<State<T>>;
-
-		template<typename T>
-		struct IsGlobalState : std::is_same<T, GlobalState<MPL::unwrap_t<T>>> {};
-
-		template<typename T>
-		using IsRawGlobalState = std::conjunction<IsGlobalState<State<T>>>;
-
 		template<typename... Ts>
 		struct ComposeHelper
 		{
@@ -30,11 +25,7 @@ namespace ESL
 				return HBV::compose(HBV::and_op, MPL::nonstrict_get<const GlobalState<Entities>&>(states).Raw().Available(), MPL::nonstrict_get<const Ts&>(states).Available()...);
 			}
 		};
-		template<typename T>
-		using WrapStateNostrict = State<unwrap2_t<std::decay_t<T>>>;
 
-		template<typename T>
-		using WrapState = std::conditional_t<MPL::is_const_v<T>, MPL::add_const_t<WrapStateNostrict<T>>, WrapStateNostrict<T>>;
 
 		template<typename... Ts>
 		struct EntityDispatchHelper
@@ -42,8 +33,7 @@ namespace ESL
 			template<typename T, typename S>
 			static decltype(auto) Take(S &states, index_t id, std::true_type)
 			{
-				using WrapT = WrapState<T>;
-				auto &state = MPL::nonstrict_get<WrapT&>(states);
+				auto &state = MPL::nonstrict_get<StateStrict<T>&>(states);
 
 				Entity e = MPL::nonstrict_get<const GlobalState<Entities>&>(states).Raw().Get(id);
 				return *state.Get(e);
@@ -52,26 +42,18 @@ namespace ESL
 			template<typename T, typename S>
 			static decltype(auto) Take(S &states, index_t id, std::false_type)
 			{
-				using WrapT = WrapState<T>;
-				using DecayT = std::decay_t<T>;
-
 				if constexpr(std::is_same<T, Entity>{})
 				{
 					return MPL::nonstrict_get<const GlobalState<Entities>&>(states).Raw().Get(id);
 				}
 				else
 				{
-					auto &state = MPL::nonstrict_get<WrapT&>(states);
-
-					if constexpr(IsEntityState<DecayT>{})
-					{
-						return state;
-					}
-					else if constexpr(IsRawGlobalState<DecayT>{})
+					auto &state = MPL::nonstrict_get<StateStrict<T>&>(states);
+					if constexpr(IsRawState<std::decay_t<T>>{}) //GlobalState自动解包
 					{
 						return state.Raw();
 					}
-					else //if constexpr(IsGlobalState<DecayT>{})
+					else 
 					{
 						return state;
 					}
@@ -91,8 +73,8 @@ namespace ESL
 			template<typename T, typename S>
 			static auto& Take(S &states)
 			{
-				auto& state = MPL::nonstrict_get<WrapState<T>&>(states);
-				if constexpr(IsRawGlobalState<std::decay_t<T>>{})
+				auto& state = MPL::nonstrict_get<StateStrict<T>&>(states);
+				if constexpr(IsRawState<std::decay_t<T>>{})
 				{
 					return state.Raw();
 				}
@@ -107,16 +89,13 @@ namespace ESL
 			}
 		};
 
-
-		//TODO:
-		//  Fetch with const
 		template<typename... Ts>
 		struct FetchHelper
 		{
 			template<typename T>
 			static T& Take(States &states)
 			{
-				using Raw = unwrap2_t<std::decay_t<T>>;
+				using Raw = typename TStateTrait<std::decay_t<T>>::Raw;
 				return *states.Get<Raw>();
 			}
 
@@ -124,18 +103,6 @@ namespace ESL
 			{
 				return std::tie(Take<Ts>(states)...);
 			}
-		};
-
-		template<typename T, typename... Ts>
-		struct FxxkMSVC
-		{
-			using type = MPL::concat_t<MPL::typelist<WrapState<T>>, typename FxxkMSVC<Ts...>::type>;
-		};
-
-		template<typename T>
-		struct FxxkMSVC<T>
-		{
-			using type = MPL::typelist<WrapState<T>, WrapState<GEntities>>;
 		};
 
 		template<typename S>
@@ -161,11 +128,14 @@ namespace ESL
 	{
 		using Trait = MPL::generic_function_trait<std::decay_t<F>>;
 		using Argument = typename Trait::argument_type;
-		//using FitchStates = MPL::unique_t<MPL::map_t<Dispatcher::WrapState, Argument>>;
-		using FetchStates = typename Dispatcher::FilterMutable<MPL::unique_t<typename MPL::rewrap_t<Dispatcher::FxxkMSVC, Argument>::type>>::type;
+		using TrueArgument = MPL::concat_t<MPL::typelist<const Entities>, Argument>; //添加上Entities得到真正的参数
 
-		return MPL::rewrap_t<Dispatcher::FetchHelper, FetchStates>::Fetch(states);
+		using NeedStates = MPL::mapr_t<StateStrict, TrueArgument>; //获得需要的States
+		using FetchStates = typename Dispatcher::FilterMutable<MPL::unique_t<NeedStates>>::type; //去重,读写保留写
+
+		return MPL::rewrap_t<Dispatcher::FetchHelper, FetchStates>::Fetch(states); //拿取资源
 	}
+
 
 	template<typename F, typename S>
 	void Dispatch(S states, F&& logic)
@@ -173,10 +143,10 @@ namespace ESL
 		using Trait = MPL::generic_function_trait<std::decay_t<F>>;
 		using Argument = typename Trait::argument_type;
 		using DecayArgument = MPL::map_t<std::decay_t, Argument>;
+		using States = MPL::fliter_t<IsState, DecayArgument>;
+		using EntityStates = MPL::map_t<State, MPL::fliter_t<IsRawEntityState, States>>;
 
-		using EntityStates = MPL::map_t<State, MPL::fliter_t<Dispatcher::IsRawEntityState, DecayArgument>>;
-
-		if constexpr(MPL::size<EntityStates>{} == 0)
+		if constexpr(MPL::size<EntityStates>{} == 0 && !MPL::contain_v<Entity, DecayArgument>) //不进行分派
 		{
 			MPL::rewrap_t<Dispatcher::DispatchHelper, Argument>::Dispatch(states, logic);
 		}

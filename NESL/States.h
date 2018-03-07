@@ -5,17 +5,93 @@
 #include "GlobalState.h"
 #include "Entity.h"
 #include "EntityState.h"
+#include "MPL.h"
 
 namespace ESL
 {
 	template<typename T>
-	struct TState { using type = GlobalState<T>; };
+	struct TState;
 
 	template<typename T>
 	using State = typename TState<T>::type;
 
 	template<>
-	struct TState<Entity> { using type = const GlobalState<Entities>; };
+	struct TState<Entities> { using type = GlobalState<Entities>; };
+
+	template<typename T>
+	struct IsState : MPL::is_complete<TState<T>> {};
+
+	template<typename T>
+	struct TStateTrait;
+
+	struct TEntityState;
+	struct TGlobalState;
+	
+
+	template<template<typename> class V, typename T>
+	struct TStateTrait<EntityState<V<T>>>
+	{
+		using Raw = T;
+		using Type = TEntityState;
+	};
+
+	template<typename T>
+	struct TStateTrait<GlobalState<T>>
+	{
+		using Raw = T;
+		using Type = TGlobalState;
+	};
+
+
+
+	template<typename T>
+	struct TStateNonstric
+	{
+		using State = State<T>;
+		using Raw = T;
+	};
+
+	template<>
+	struct TStateNonstric<Entity>
+	{
+		using State = GlobalState<Entities>;
+		using Raw = Entities;
+	};
+
+	template<template<typename> class V, typename T>
+	struct TStateNonstric<EntityState<V<T>>>
+	{
+		using State = EntityState<V<T>>;
+		using Raw = T;
+	};
+
+	template<typename T>
+	struct TStateNonstric<GlobalState<T>>
+	{
+		using State = GlobalState<T>;
+		using Raw = T;
+	};
+
+	template<typename T>
+	using StateNonstrict = typename TStateNonstric<std::decay_t<T>>::State;
+
+	template<typename T>
+	using RawNonstrict = typename TStateNonstric<T>::Raw;
+
+	template<typename T>
+	struct TStateStrict
+	{
+		using type = std::conditional_t<MPL::is_const_v<T>, MPL::add_const_t<StateNonstrict<T>>, StateNonstrict<T>>;
+	};
+
+	template<>
+	struct TStateStrict<Entity>
+	{
+		using type = const GlobalState<Entities>;
+	};
+
+	template<typename T>
+	using StateStrict = typename TStateStrict<T>::type;
 
 	class States
 	{

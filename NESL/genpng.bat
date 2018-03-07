@@ -1,0 +1,1 @@
+dot -Tpng ./test.gv -o ./test.png

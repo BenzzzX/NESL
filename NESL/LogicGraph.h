@@ -169,6 +169,7 @@ namespace ESL
 
 				for (auto &read : node->_reads)
 				{
+					if (read == typeid(GlobalState<Entities>).hash_code()) continue;
 					std::size_t &id = states[read];
 					StateNode &sn = _stateNodes[id];
 					sn._readers.push_back(node);
@@ -228,13 +229,13 @@ namespace ESL
 			MPL::for_tuple(fetchedStates, [&node, this](auto &wrapper)
 			{
 				using type = decltype(wrapper);
-				using intern = MPL::unwrap_t<MPL::unwrap_t<std::decay_t<type>>>;
+				using intern = typename TStateTrait<std::decay_t<type>>::Raw;
 				std::size_t id = typeid(type).hash_code();
 
 				if (_stateInfos.find(id) == _stateInfos.end())
 				{
 					auto& stateInfo = _stateInfos[id];
-					stateInfo._name = typeid(intern).name();
+					stateInfo._name = typeid(intern).name() + 8;
 					stateInfo._isGlobal = std::is_same_v<State<intern>, GlobalState<intern>>;
 				}
 
@@ -278,12 +279,12 @@ namespace ESL
 
 			stream << "rankdir = LR\n";
 			stream << "bgcolor = black\n\n";
-			stream << "node [shape=rectangle, fontname=\"helvetica\", fontsize=12]\n\n";
+			stream << "node [shape=rectangle, fontname=\"helvetica\", fontsize=12, fontcolor=white]\n\n";
 
 			for (auto& logicPair : _logicNodes)
 			{
 				auto& logic = logicPair.second;
-				stream << "\"" << logic._name << "\" [label=\"" << logic._name << "\", style=filled, fillcolor=darkorange]\n";
+				stream << "\"" << logic._name << "\" [label=\"" << logic._name << "\", style=bold, color=darkorange]\n";
 			}
 			stream << "\n";
 
@@ -313,7 +314,7 @@ namespace ESL
 				if (state._id == typeid(GlobalState<Entities>).hash_code()) continue;
 				const StateInfo &info = _stateInfos[state._id];
 				const char* name = info._name;
-				stream << "\"" << name << state._version << "\" [label=\"" << name << "\", style=filled, fillcolor= " << (info._isGlobal ? "skyblue" : "steelblue") << "]\n";
+				stream << "\"" << name << state._version << "\" [label=\"" << name << "\", style=bold, color= " << (info._isGlobal ? "skyblue" : "steelblue") << "]\n";
 
 				stream << "\"" << name << state._version << "\" -> { ";
 				for (auto& logic : state._readers)
