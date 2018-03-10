@@ -2,7 +2,8 @@
 #include <type_traits>
 #include <utility>
 
-namespace MPL {
+namespace MPL 
+{
 	template <template <typename...> class TNewName, typename T> struct rewrap;
 
 	// "Renames" `TOldName<Ts...>` to `TNewName<Ts...>`.
@@ -86,7 +87,8 @@ namespace MPL {
 	template <template <typename> class, typename> struct map;
 
 	template <template <typename> class F, typename... Ts>
-	struct map<F, typelist<Ts...>> {
+	struct map<F, typelist<Ts...>> 
+	{
 		using type = typelist<F<Ts>...>;
 	};
 
@@ -96,6 +98,9 @@ namespace MPL {
 	using map_t = typename map<F, T>::type;
 
 	template <template <typename> class, typename> struct fliter;
+
+	template <template <typename> class F, typename T>
+	using fliter_t = typename fliter<F, T>::type;
 
 	template <template <typename> class F> 
 	struct fliter<F, typelist<>> 
@@ -107,13 +112,12 @@ namespace MPL {
 		using type = std::conditional_t
 		<
 			F<T>::value,
-			concat_t<typelist<T>, typename fliter<F, typelist<Ts...>>::type>,
-			typename fliter<F, typelist<Ts...>>::type
+			concat_t<typelist<T>, fliter_t<F, typelist<Ts...>>>,
+			fliter_t<F, typelist<Ts...>>
 		>;
 	};
 
-	template <template <typename> class F, typename T>
-	using fliter_t = typename fliter<F, T>::type;
+	
 
 	template <typename... Ts>
 	struct size_raw : std::integral_constant<std::size_t, sizeof...(Ts)> {};

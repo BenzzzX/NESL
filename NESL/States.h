@@ -18,6 +18,21 @@ namespace ESL
 	template<>
 	struct TState<Entities> { using type = GlobalState<Entities>; };
 
+
+#define ENTITY_STATE(name, container) \
+namespace ESL \
+{ \
+	template<> \
+	struct TState<name> { using type = EntityState<container<name>>; }; \
+}
+
+#define GLOBAL_STATE(name) \
+namespace ESL \
+{ \
+	template<> \
+	struct TState<name> { using type = GlobalState<name>; }; \
+}
+
 	template<typename T>
 	struct IsState : MPL::is_complete<TState<T>> {};
 

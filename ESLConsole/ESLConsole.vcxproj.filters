@@ -13,43 +13,45 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Darwin">
+      <UniqueIdentifier>{3951dbec-1431-47ae-a22e-c7a08ea00f09}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="NESL.h">
-      <Filter>头文件</Filter>
+    <ClInclude Include="darwin\adapter.hpp">
+      <Filter>Darwin</Filter>
     </ClInclude>
-    <ClInclude Include="HBV.h">
-      <Filter>头文件</Filter>
+    <ClInclude Include="darwin\core.hpp">
+      <Filter>Darwin</Filter>
     </ClInclude>
-    <ClInclude Include="MPL.h">
-      <Filter>头文件</Filter>
+    <ClInclude Include="darwin\darwin.hpp">
+      <Filter>Darwin</Filter>
     </ClInclude>
-    <ClInclude Include="EntityState.h">
-      <Filter>头文件</Filter>
+    <ClInclude Include="darwin\debugger.hpp">
+      <Filter>Darwin</Filter>
     </ClInclude>
-    <ClInclude Include="Entity.h">
-      <Filter>头文件</Filter>
+    <ClInclude Include="darwin\graphics.hpp">
+      <Filter>Darwin</Filter>
     </ClInclude>
-    <ClInclude Include="States.h">
-      <Filter>头文件</Filter>
+    <ClInclude Include="darwin\module.hpp">
+      <Filter>Darwin</Filter>
     </ClInclude>
-    <ClInclude Include="LogicGraph.h">
-      <Filter>头文件</Filter>
+    <ClInclude Include="darwin\random.hpp">
+      <Filter>Darwin</Filter>
     </ClInclude>
-    <ClInclude Include="GlobalState.h">
-      <Filter>头文件</Filter>
+    <ClInclude Include="darwin\timer.hpp">
+      <Filter>Darwin</Filter>
     </ClInclude>
-    <ClInclude Include="Dispather.h">
-      <Filter>头文件</Filter>
+    <ClInclude Include="darwin\win32_conio.hpp">
+      <Filter>Darwin</Filter>
     </ClInclude>
-    <ClInclude Include="Parallel.h">
-      <Filter>头文件</Filter>
+    <ClInclude Include="darwin\win32_module.hpp">
+      <Filter>Darwin</Filter>
     </ClInclude>
-    <ClInclude Include="vector.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="small_vector.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Game.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

@@ -107,7 +107,11 @@ namespace ESL
 		T &Create(Entity e, Ts&&... args)
 		{
 			if (e.id >= _states.size())
+			{
+				T init{ std::forward<Ts>(args)... };
 				_states.resize(e.id + 1);
+				return *(new(&_states[e.id]) T{ std::move(init) });
+			}
 			
 			return *(new(&_states[e.id]) T{ std::forward<Ts>(args)... });
 		}
@@ -176,6 +180,7 @@ namespace ESL
 		T &Create(Entity e, Ts&&... args)
 		{
 			auto free = GetFree();
+			T init{ std::forward<Ts>(args)... };
 			while (!free.has_value() || free.value() >= _states.size())
 			{
 				_states.resize(_states.size() + 10u);
@@ -186,7 +191,7 @@ namespace ESL
 			if (e.id >= _redirector.size())
 				_redirector.resize(e.id + 1);
 			_redirector[e.id] = free.value();
-			return *(new(&_states[_redirector[e.id]]) T{ std::forward<Ts>(args)... });
+			return *(new(&_states[_redirector[e.id]]) T{ std::move(init) });
 		}
 
 		void Remove(Entity e)

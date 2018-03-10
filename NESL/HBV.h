@@ -143,9 +143,9 @@ namespace HBV
 
 		void clear() noexcept
 		{
-			_layer3.clear();
-			_layer2.clear();
-			_layer1.clear();
+			std::fill(_layer3.begin(), _layer3.end(), 0u);
+			std::fill(_layer2.begin(), _layer2.end(), 0u);
+			std::fill(_layer1.begin(), _layer1.end(), 0u);
 			_layer0 = 0u;
 		}
 

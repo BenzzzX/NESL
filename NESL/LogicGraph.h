@@ -50,7 +50,7 @@ namespace ESL
 			std::unordered_set<LogicNode*> _implicitSuccessors;
 			tbb::flow::continue_node<tbb::flow::continue_msg>* _graphNode;
 			std::string _name;
-			int _refcount = 0;
+			int32_t _refcount = 0;
 			friend LogicGraphBuilder;
 
 		public:
@@ -59,7 +59,7 @@ namespace ESL
 			template<typename... Ts>
 			void Depends(Ts&&... args)
 			{
-				std::initializer_list<int> _{ (dependencies.push_back(std::forward<Ts>(args)),0)... };
+				std::initializer_list<int32_t> _{ (dependencies.push_back(std::forward<Ts>(args)),0)... };
 			}
 		};
 
@@ -117,7 +117,7 @@ namespace ESL
 				succs.push_back(succ); 
 				if (implicit) node->_implicitSuccessors.insert(succ);
 			}
-			else
+			else if(!implicit)
 			{
 				node->_manualSuccessors.erase(succ);
 			}
@@ -152,7 +152,7 @@ namespace ESL
 				states[it.first] = _stateNodes.size() - 1;
 			}
 
-			_flattenNodes.reserve(_logicNodes.size());
+			_flattenNodes.reserve(_logicNodes.size() + 1);
 			while (!searching.empty())
 			{
 				LogicNode* node = searching.front();
@@ -257,8 +257,8 @@ namespace ESL
 		void Build(LogicGraph& graph)
 		{
 			std::size_t size = _flattenNodes.size();
-			graph._logicNodes.reserve(size);
-			for (int i = size - 1; i >= 0; i--)
+			graph._logicNodes.reserve(size + 1);
+			for (long long i = size - 1; i >= 0; i--)
 			{
 				auto& node = _flattenNodes[i];
 				graph._logicNodes.emplace_back(graph._logicGraph, [f = std::move(node->_dispatcher)](tbb::flow::continue_msg) { f(); });
