@@ -1,11 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.27130.2036
+VisualStudioVersion = 15.0.27130.2020
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "NESL", "NESL\NESL.vcxproj", "{B9EE23AC-3550-42CB-A174-5AC748D22AA2}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ESLConsole", "ESLConsole\ESLConsole.vcxproj", "{906AC674-C481-4591-B277-6B73E8578AA9}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ESLPlugin", "ESLPlugin\ESLPlugin.vcxproj", "{0C9E417F-93B9-4921-9710-1FBEE78DC8AE}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -31,6 +33,14 @@ Global
 		{906AC674-C481-4591-B277-6B73E8578AA9}.Release|x64.Build.0 = Release|x64
 		{906AC674-C481-4591-B277-6B73E8578AA9}.Release|x86.ActiveCfg = Release|Win32
 		{906AC674-C481-4591-B277-6B73E8578AA9}.Release|x86.Build.0 = Release|Win32
+		{0C9E417F-93B9-4921-9710-1FBEE78DC8AE}.Debug|x64.ActiveCfg = Debug|x64
+		{0C9E417F-93B9-4921-9710-1FBEE78DC8AE}.Debug|x64.Build.0 = Debug|x64
+		{0C9E417F-93B9-4921-9710-1FBEE78DC8AE}.Debug|x86.ActiveCfg = Debug|Win32
+		{0C9E417F-93B9-4921-9710-1FBEE78DC8AE}.Debug|x86.Build.0 = Debug|Win32
+		{0C9E417F-93B9-4921-9710-1FBEE78DC8AE}.Release|x64.ActiveCfg = Release|x64
+		{0C9E417F-93B9-4921-9710-1FBEE78DC8AE}.Release|x64.Build.0 = Release|x64
+		{0C9E417F-93B9-4921-9710-1FBEE78DC8AE}.Release|x86.ActiveCfg = Release|Win32
+		{0C9E417F-93B9-4921-9710-1FBEE78DC8AE}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

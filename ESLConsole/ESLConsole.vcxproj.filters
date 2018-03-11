@@ -48,6 +48,9 @@
     <ClInclude Include="darwin\win32_module.hpp">
       <Filter>Darwin</Filter>
     </ClInclude>
+    <ClInclude Include="Declare.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Game.cpp">

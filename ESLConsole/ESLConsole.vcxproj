@@ -22,7 +22,7 @@
     <VCProjectVersion>15.0</VCProjectVersion>
     <ProjectGuid>{906AC674-C481-4591-B277-6B73E8578AA9}</ProjectGuid>
     <RootNamespace>ESLConsole</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.16299.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0.14393.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -70,12 +70,12 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>C:\Users\BenzzZX\source\repos\NESL\NESL\tbb\include;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Users\BenzzZX\source\repos\NESL\NESL\tbb\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(IncludePath);$(SolutionDir)NESL\tbb\include</IncludePath>
+    <LibraryPath>$(LibraryPath);$(SolutionDir)NESL\tbb\lib</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>C:\Users\BenzzZX\source\repos\NESL\NESL\tbb\include;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Users\BenzzZX\source\repos\NESL\NESL\tbb\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(IncludePath);$(SolutionDir)NESL\tbb\include</IncludePath>
+    <LibraryPath>$(LibraryPath);$(SolutionDir)NESL\tbb\lib</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -134,6 +134,7 @@
     <ClInclude Include="darwin\timer.hpp" />
     <ClInclude Include="darwin\win32_conio.hpp" />
     <ClInclude Include="darwin\win32_module.hpp" />
+    <ClInclude Include="Declare.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Game.cpp" />
