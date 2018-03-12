@@ -1,4 +1,6 @@
 # ESL
+
+[![Join the chat at https://gitter.im/ImmediateCode/Lobby](https://badges.gitter.im/ImmediateCode/Lobby.svg)](https://gitter.im/ImmediateCode/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 ESL 框架全称 Entity State Logic ,是一个基于 ECS 模型的 C++17 通用框架.
 ***
 ## 目录
