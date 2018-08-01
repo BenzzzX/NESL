@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iostream>
 #include <tbb\tbb.h>
+#include "Parallel.h"
 
 
 namespace ESL
@@ -51,13 +52,14 @@ namespace ESL
 			tbb::flow::continue_node<tbb::flow::continue_msg>* _graphNode;
 			std::string _name;
 			int32_t _refcount = 0;
+			bool _is_parallel = false;
 			friend LogicGraphBuilder;
 
 		public:
 			chobo::small_vector<std::string, 8> dependencies;
 
 			template<typename... Ts>
-			void Depends(Ts&&... args)
+			void After(Ts&&... args)
 			{
 				std::initializer_list<int32_t> _{ (dependencies.push_back(std::forward<Ts>(args)),0)... };
 			}
@@ -214,15 +216,48 @@ namespace ESL
 		LogicGraphBuilder(States& states) : states(states) {}
 
 		template<typename F>
-		LogicNode& Create(F&& f, std::string name)
+		LogicNode& Schedule(F&& f, std::string name)
 		{
 			auto fetchedStates = FetchFor(states, f);
 			LogicNode& node = _logicNodes[name];
 			node._name = name;
 			node._dispatcher = [fetchedStates, f = std::forward<F>(f)]()
 			{
-				//TODO: add support for parallel dispatch
 				Dispatch(fetchedStates, f);
+			};
+			node._reads.clear();
+			node._writes.clear();
+			MPL::for_tuple(fetchedStates, [&node, this](auto &wrapper)
+			{
+				using type = decltype(wrapper);
+				using intern = typename TStateTrait<std::decay_t<type>>::Raw;
+				std::size_t id = typeid(type).hash_code();
+
+				if (_stateInfos.find(id) == _stateInfos.end())
+				{
+					auto& stateInfo = _stateInfos[id];
+					stateInfo._name = typeid(intern).name() + 8;
+					stateInfo._isGlobal = std::is_same_v<State<intern>, GlobalState<intern>>;
+				}
+
+				if constexpr(MPL::is_const_v<type>)
+					node._reads.push_back(id);
+				else
+					node._writes.push_back(id);
+			});
+			return node;
+		}
+
+		template<typename F>
+		LogicNode& ScheduleParallel(F&& f, std::string name)
+		{
+			auto fetchedStates = FetchFor(states, f);
+			LogicNode& node = _logicNodes[name];
+			node._name = name;
+			node._is_parallel = true;
+			node._dispatcher = [fetchedStates, f = std::forward<F>(f)]()
+			{
+				DispatchParallel(fetchedStates, f);
 			};
 			node._reads.clear();
 			node._writes.clear();

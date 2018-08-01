@@ -96,7 +96,7 @@ namespace ESL
 			static T& Take(States &states)
 			{
 				using Raw = typename TStateTrait<std::decay_t<T>>::Raw;
-				return *states.Get<Raw>();
+				return *states.GetState<Raw>();
 			}
 
 			static auto Fetch(States &states)
@@ -120,6 +120,10 @@ namespace ESL
 
 		template<typename F, typename S>
 		friend void Dispatch(S states, F&& logic);
+
+
+		template<typename F, typename S>
+		friend void DispatchParallel(S states, F&& logic);
 		
 	};
 
@@ -130,7 +134,7 @@ namespace ESL
 		using Argument = typename Trait::argument_type;
 		using TrueArgument = MPL::concat_t<MPL::typelist<const Entities>, Argument>; //添加上Entities得到真正的参数
 
-		using NeedStates = MPL::mapr_t<StateStrict, TrueArgument>; //获得需要的States
+		using NeedStates = MPL::map_t<StateStrict, TrueArgument>; //获得需要的States
 		using FetchStates = typename Dispatcher::FilterMutable<MPL::unique_t<NeedStates>>::type; //去重,读写保留写
 
 		return MPL::rewrap_t<Dispatcher::FetchHelper, FetchStates>::Fetch(states); //拿取资源
@@ -153,7 +157,7 @@ namespace ESL
 		else
 		{
 			const auto available = MPL::rewrap_t<Dispatcher::ComposeHelper, EntityStates>::ComposeBitVector(states);
-			HBV::for_each(available, [&states, &logic](index_t i)
+			HBV::for_each(available, [&states, &logic](index_t i) //分派
 			{
 				MPL::rewrap_t<Dispatcher::EntityDispatchHelper, Argument>::Dispatch(states, i, logic);
 			});

@@ -43,8 +43,12 @@ auto Logic_LifeTime(ELifeTime& life, ESL::Entity self, const GEntities& entities
 		entities.Kill(self);
 }
 
-auto Logic_Spawn(const ESpawner& sp, const ELocation& loc, GEntities& entities,
-	ESL::State<ELifeTime>& lifetimes, ESL::State<ELocation>& locations,
+
+auto Logic_Spawn(
+	const ESpawner& sp, const ELocation& loc, 
+	GEntities& entities,
+	ESL::State<ELifeTime>& lifetimes, 
+	ESL::State<ELocation>& locations,
 	ESL::State<EAppearance>& appearances)
 {
 	auto res = entities.TrySpawn();
@@ -59,34 +63,27 @@ auto Logic_Spawn(const ESpawner& sp, const ELocation& loc, GEntities& entities,
 
 #pragma endregion
 
-auto Init(GEntities& entities, ESL::State<ESpawner>& spawners, ESL::State<ELocation>& locations,
-	ESL::State<EVelocity>& velocities, ESL::State<EAppearance>& appearances)
+void Register(ESL::States& st, ESL::LogicGraphBuilder& graph)
 {
-	auto res = entities.TrySpawn();
-	if (res.has_value())
-	{
-		auto e = res.value();
-		locations.Create(e, 5, 5);
-		appearances.Create(e, '@');
-		velocities.Create(e, 5, 0);
-		spawners.Create(e, 1);
-	}
-}
+	st.CreateState<EVelocity>();
+	st.CreateState<ELocation>();
+	st.CreateState<ELifeTime>();
+	st.CreateState<EAppearance>();
+	st.CreateState<ESpawner>();
+	st.CreateState<GFrame>();
+	st.CreateState<GCanvas>();
 
-void Register(ESL::States& st, ESL::LogicGraphBuilder& graphBuilder)
-{
-	st.Create<EVelocity>();
-	st.Create<ELocation>();
-	st.Create<ELifeTime>();
-	st.Create<EAppearance>();
-	st.Create<ESpawner>();
-	graphBuilder.Create(Logic_Draw, "Draw");
-	graphBuilder.Create(Logic_Move, "Move").Depends("Draw", "Spawn");
-	graphBuilder.Create(Logic_LifeTime, "LifeTime").Depends("Spawn");
-	graphBuilder.Create(Logic_Spawn, "Spawn").Depends("Draw");
-}
+	graph.Schedule(Logic_Draw, "Draw");
+	graph.ScheduleParallel(Logic_Move, "Move").After("Draw", "Spawn");
+	graph.Schedule(Logic_LifeTime, "LifeTime").After("Spawn");
+	graph.Schedule(Logic_Spawn, "Spawn").After("Draw");
 
-using fRegister = void(*)(ESL::States&, ESL::LogicGraphBuilder&);
+	st.Spawn()
+		.Create(ELocation{ 5,5 })
+		.Create(EAppearance{ '@' })
+		.Create(EVelocity{ 5,0 })
+		.Create(ESpawner{ 1 });
+}
 
 void RegisterPlugins(ESL::States& st, ESL::LogicGraphBuilder& graphBuilder)
 {
@@ -102,7 +99,7 @@ void RegisterPlugins(ESL::States& st, ESL::LogicGraphBuilder& graphBuilder)
 		strcpy(pluginDir + 8, findData.name);
 		std::cout << pluginDir << "\n";
 		HMODULE hModule = LoadLibrary(pluginDir);
-		fRegister reg = reinterpret_cast<fRegister>(GetProcAddress(hModule, "Register"));
+		auto reg = reinterpret_cast<void(*)(ESL::States&, ESL::LogicGraphBuilder&)>(GetProcAddress(hModule, "Register"));
 		reg(st, graphBuilder);
 		//FreeLibrary(hModule);
 	} while (_findnext(handle, &findData) == 0);
@@ -115,18 +112,15 @@ int main()
 #pragma region ESL
 
 	ESL::States st;
-	ESL::LogicGraphBuilder graphBuilder(st);
-	GFrame &frame = st.Create<GFrame>().Raw();
-	GCanvas &canvas = st.Create<GCanvas>().Raw();
+	ESL::LogicGraphBuilder graph(st);
 
-	Register(st, graphBuilder);
-	ESL::Dispatch(st, Init);
-	RegisterPlugins(st, graphBuilder);
+	Register(st, graph);
+	RegisterPlugins(st, graph);
 
-	graphBuilder.Compile();
-	graphBuilder.ExportGraphviz("test.gv");
+	graph.Compile();
+	graph.ExportGraphviz("test.gv");
 	ESL::LogicGraph logicGraph;
-	graphBuilder.Build(logicGraph);
+	graph.Build(logicGraph);
 
 #pragma endregion
 

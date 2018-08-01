@@ -113,9 +113,11 @@ namespace ESL \
 		std::unordered_map<std::size_t, std::any> _states;
 		std::vector<std::function<void(Entity)>> _onEntityDie;
 		GlobalState<ESL::Entities>& _entities;
+
+		
 		
 	public:
-		States() : _entities(Create<ESL::Entities>()){}
+		States() : _entities(CreateState<ESL::Entities>()){}
 
 		void Tick()
 		{
@@ -133,9 +135,9 @@ namespace ESL \
 		}
 
 		template<typename T>
-		auto* Get() noexcept
+		auto* GetState() noexcept
 		{
-			if constexpr(std::is_same_v<GEntities, T>)
+			if constexpr(std::is_same_v<ESL::Entities, T>)
 			{
 				return &_entities;
 			}
@@ -162,14 +164,45 @@ namespace ESL \
 			});
 		}
 	public:
-		template<typename T, typename... Ts>
-		auto &Create(Ts... args) noexcept
+		template<typename T>
+		auto &CreateState() noexcept
 		{
 			using ST = State<T>;
-			auto &state = std::any_cast<ST&>(_states.insert({ typeid(ST).hash_code(), std::any{ ST{ args... } } }).first->second);
+			auto &state = std::any_cast<ST&>(_states.insert({ typeid(ST).hash_code(), std::any{ ST{} } }).first->second);
 			RegisterEntityDie(state);
 			return state;
 		}
+		
+	public:
+
+		Entity Spawn()
+		{
+			auto e = _entities.Raw().ForceSpawn();
+			return e;
+		}
 	};
+
+	/*
+	template<typename... Ts>
+	class SubStates
+	{
+		using arg_types = MPL::map_t<State, MPL::typelist<Ts...>>; 
+		template<typename T>
+		struct Checker {
+			static_assert(IsEntityState<T>{}, "must be entity state!");
+		};
+		using _ = MPL::map_t<Checker, arg_types>;
+		template<typename T>
+		using ref_t = T & ;
+	public:
+		using types = MPL::concat_t<MPL::typelist<const Entities>, arg_types>;
+
+
+	private:
+		using ref_types = MPL::map_t<ref_t, types>;
+		using tuple_type = MPL::rewrap_t<std::tuple, ref_types>;
+		tuple_type _refs;
+	};
+	*/
 }
 

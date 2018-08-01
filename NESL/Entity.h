@@ -67,6 +67,20 @@ namespace ESL
 			return Entity{ id.value(), g+1 };
 		}
 
+		Entity ForceSpawn()
+		{
+			auto id = GetFree();
+			if (!id.has_value())
+			{
+				Grow();
+				id = GetFree();
+			}
+			Generation &g = _generation[id.value()];
+			_dead.set(id.value(), false);
+			_alive.set(id.value(), true);
+			return Entity{ id.value(), g + 1 };
+		}
+
 		bool Alive(Entity e) const
 		{
 			return _generation[e.id] == e.generation

@@ -956,7 +956,7 @@ namespace lni {
 	void vector<unsigned long long int>::resize(typename vector<unsigned long long int>::size_type sz, const unsigned long long int &c) {
 		if (sz > vec_sz) {
 			if (sz > rsrv_sz) {
-				rsrv_sz = sz;
+				rsrv_sz += sz;
 				reallocate();
 			}
 			size_type i;

@@ -82,7 +82,8 @@ namespace ESL
 				parent::resize(sz);
 			else
 			{
-				if (sz > capacity()) reserve(sz);
+				if (sz > capacity()) 
+					reserve(sz + capacity());
 				parent::_Mylast() = parent::_Myfirst() + sz;
 			}
 		}
@@ -109,7 +110,7 @@ namespace ESL
 			if (e.id >= _states.size())
 			{
 				T init{ std::forward<Ts>(args)... };
-				_states.resize(e.id + 1);
+				_states.resize(e.id + 1u);
 				return *(new(&_states[e.id]) T{ std::move(init) });
 			}
 			

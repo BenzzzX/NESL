@@ -66,24 +66,6 @@ namespace MPL
 		using type = concat_t<typelist<Ts0..., Ts1...>, TRest...>;
 	};
 
-
-	template <template <typename> class, typename> struct mapr;
-
-	template <template <typename> class F, typename T>
-	using mapr_t = typename mapr<F, T>::type;
-
-	template<template<typename> class F, typename T, typename... Ts>
-	struct mapr<F, typelist<T, Ts...>>
-	{
-		using type = concat_t<typelist<F<T>>, mapr_t<F, typelist<Ts...>>>;
-	};
-
-	template<template<typename> class F, typename T>
-	struct mapr<F, typelist<T>>
-	{
-		using type = typelist<F<T>>;
-	};
-
 	template <template <typename> class, typename> struct map;
 
 	template <template <typename> class F, typename... Ts>
