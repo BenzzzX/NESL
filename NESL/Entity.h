@@ -23,10 +23,10 @@ namespace ESL
 
 		void Grow(index_t to)
 		{
-			_dead.grow(to, true);
+			_dead.grow_to(to, true);
 			_generation.resize(to, 0u);
-			_killed.grow(to);
-			_alive.grow(to);
+			_killed.grow_to(to);
+			_alive.grow_to(to);
 		}
 
 		auto GetFree()
@@ -40,7 +40,7 @@ namespace ESL
 			return id;
 		}
 	public:
-		Entities() : _generation(10000u), _dead(10000u, true), _killed(10000u), _alive(10000u) {}
+		Entities(index_t size = 10u, bool spawn = false) : _generation(size), _dead(size, !spawn), _killed(size), _alive(size, spawn) {}
 
 		void Grow()
 		{

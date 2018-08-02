@@ -55,9 +55,9 @@ auto Logic_Spawn(
 	if (res.has_value())
 	{
 		auto e = res.value();
-		lifetimes.Create(e, sp.life);
-		locations.Create(e, loc.x, loc.y);
-		appearances.Create(e, '*');
+		lifetimes.Create(e, { sp.life });
+		locations.Create(e, { loc.x, loc.y });
+		appearances.Create(e, { '*' });
 	}
 }
 
@@ -65,24 +65,19 @@ auto Logic_Spawn(
 
 void Register(ESL::States& st, ESL::LogicGraphBuilder& graph)
 {
-	st.CreateState<EVelocity>();
-	st.CreateState<ELocation>();
+	auto e = st.Spawn();
+	st.CreateState<EVelocity>().Create(e, { 5,0 });
+	st.CreateState<ELocation>().Create(e, { 5,5 });
 	st.CreateState<ELifeTime>();
-	st.CreateState<EAppearance>();
-	st.CreateState<ESpawner>();
+	st.CreateState<EAppearance>().Create(e, { '@' });
+	st.CreateState<ESpawner>().Create(e, { 1 });
 	st.CreateState<GFrame>();
 	st.CreateState<GCanvas>();
 
 	graph.Schedule(Logic_Draw, "Draw");
-	graph.ScheduleParallel(Logic_Move, "Move").After("Draw", "Spawn");
+	graph.Schedule(Logic_Move, "Move").After("Draw", "Spawn");
 	graph.Schedule(Logic_LifeTime, "LifeTime").After("Spawn");
 	graph.Schedule(Logic_Spawn, "Spawn").After("Draw");
-
-	st.Spawn()
-		.Create(ELocation{ 5,5 })
-		.Create(EAppearance{ '@' })
-		.Create(EVelocity{ 5,0 })
-		.Create(ESpawner{ 1 });
 }
 
 void RegisterPlugins(ESL::States& st, ESL::LogicGraphBuilder& graphBuilder)

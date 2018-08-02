@@ -11,9 +11,15 @@ namespace ESL
 		HBV::bit_vector _entity;
 		T _container;
 
+		template<typename T>
+		struct value_type;
+
+		template<template<typename> class V,typename T>
+		struct value_type<V<T>> { using type = T; };
+
+		using value_type_t = typename value_type<T>::type;
 	public:
-		template<typename... Ts>
-		EntityState(Ts... args) : _container(args...) {}
+		EntityState(std::size_t sz = 10u) : _container(sz), _entity(sz) {}
 
 		T& Raw()
 		{
@@ -40,16 +46,15 @@ namespace ESL
 			return Contain(e) ? &_container.Get(e) : nullptr;
 		}
 
-		template<typename... Ts>
-		auto &Create(Entity e, Ts&&... args)
+		auto &Create(Entity e, const value_type_t& arg)
 		{
 			if (_entity.size() <= e.id)
-				_entity.grow(e.id + 1);
+				_entity.grow_to(e.id + 1);
 			if (Contain(e))
 				_container.Remove(e);
 			else
 				_entity.set(e.id, true);
-			return _container.Create(e, std::forward<Ts>(args)...);
+			return _container.Create(e, arg);
 		}
 
 		bool Contain(Entity e) const
@@ -94,6 +99,11 @@ namespace ESL
 	{
 		uvector<T> _states;
 	public:
+
+		Vec(std::size_t sz = 10u) 
+		{
+			_states.resize(sz);
+		}
 		T &Get(Entity e)
 		{
 			return _states[e.id];
@@ -104,17 +114,15 @@ namespace ESL
 			return _states[e.id];
 		}
 
-		template<typename... Ts>
-		T &Create(Entity e, Ts&&... args)
+		T &Create(Entity e, const T& arg)
 		{
 			if (e.id >= _states.size())
 			{
-				T init{ std::forward<Ts>(args)... };
 				_states.resize(e.id + 1u);
-				return *(new(&_states[e.id]) T{ std::move(init) });
+				return *(new(&_states[e.id]) T{ arg });
 			}
 			
-			return *(new(&_states[e.id]) T{ std::forward<Ts>(args)... });
+			return *(new(&_states[e.id]) T{ arg });
 		}
 
 		void Remove(Entity e)
@@ -128,6 +136,10 @@ namespace ESL
 	{
 		std::unordered_map<index_t, T> _states;
 	public:
+		Hash(std::size_t sz = 10u)
+		{
+			_states.reserve(sz);
+		}
 		T &Get(Entity e)
 		{
 			return _states.at(e.id);
@@ -136,10 +148,10 @@ namespace ESL
 		{
 			return _states.at(e.id);
 		}
-		template<typename... Ts>
-		T &Create(Entity e, Ts&&... args)
+
+		T &Create(Entity e, const T& arg)
 		{
-			return _states.insert_or_assign(e.id, T{ std::forward<Ts>(args)... }).first->second;
+			return _states.insert_or_assign(e.id, T{ arg }).first->second;
 		}
 
 		void Remove(Entity e)
@@ -166,7 +178,13 @@ namespace ESL
 			return id;
 		}
 	public:
-		DenseVec() {}
+		DenseVec(std::size_t sz = 10u) 
+		{
+			_states.resize(sz);
+			_redirector.resize(sz);
+			_empty.grow_to(sz, true);
+		}
+
 		T & Get(Entity e)
 		{
 			return _states[_redirector[e.id]];
@@ -177,22 +195,20 @@ namespace ESL
 			return _states[_redirector[e.id]];
 		}
 
-		template<typename... Ts>
-		T &Create(Entity e, Ts&&... args)
+		T &Create(Entity e, const T& arg)
 		{
 			auto free = GetFree();
-			T init{ std::forward<Ts>(args)... };
 			while (!free.has_value() || free.value() >= _states.size())
 			{
 				_states.resize(_states.size() + 10u);
-				_empty.grow(_states.size(), true);
+				_empty.grow_to(_states.size(), true);
 				free = GetFree();
 			}
 			_empty.set(free.value(), false);
 			if (e.id >= _redirector.size())
 				_redirector.resize(e.id + 1);
 			_redirector[e.id] = free.value();
-			return *(new(&_states[_redirector[e.id]]) T{ std::move(init) });
+			return *(new(&_states[_redirector[e.id]]) T{ arg });
 		}
 
 		void Remove(Entity e)

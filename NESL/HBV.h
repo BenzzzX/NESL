@@ -88,7 +88,7 @@ namespace HBV
 		bit_vector() noexcept 
 			: bit_vector(10) {}
 
-		void grow(index_t to, bool fill = false) noexcept
+		void grow_to(index_t to, bool fill = false) noexcept
 		{
 			to -= 1;
 			to = std::min<index_t>(16'777'216u, to);
@@ -431,40 +431,41 @@ namespace HBV
 	template<bool controll = false, typename T, typename F>
 	void for_each(const T& vec, const F& f)
 	{
-		std::array<flag_t, LayerCount> masks{};
-		masks[0] = vec.layer0();
+		std::array<flag_t, LayerCount> nodes{};
+		nodes[0] = vec.layer0();
+		if (!nodes[0]) return;
 		std::array<flag_t, LayerCount> prefix{};
 
-		for (int32_t level = LayerCount - 1; level >= 0;)
+		int32_t level = 0;
+		for (;;)
 		{
-			//empty node, search parent
-			if (masks[level] == EmptyNode)
-			{ 
-				--level; 
-				continue; 
-			}
-			index_t low = lowbit_pos(masks[level]);
-			masks[level] &= ~(flag_t(1u) << low);
+			index_t low = lowbit_pos(nodes[level]);
+			nodes[level] &= ~(flag_t(1u) << low);
 			index_t id = prefix[level] | low;
-			if (level == 3) //leaf node, search sibling
+			if (level < 3) //leaf node, iterate sibling
+			{
+				++level;
+				prefix[level] = flag_t(id) << BitsPerLayer;
+				nodes[level] = vec.layer(level, id);
+			}
+			else //tree node, iterate child
 			{
 				if constexpr(controll)
 				{
 					if (!f(id)) break;
-					continue;
 				}
 				else
 				{
 					f(id);
-					continue;
 				}
-			}
-			else //tree node, search child
-			{
-				masks[level + 1] = vec.layer(level + 1, id);
-				prefix[level + 1] = flag_t(id) << BitsPerLayer;
-				++level;
-				continue;
+
+				while (nodes[level] == EmptyNode)
+				{
+					//root is empty, stop iterating
+					if (level == 0)
+						return;
+					--level;
+				}
 			}
 		}
 	}

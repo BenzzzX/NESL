@@ -124,6 +124,9 @@ namespace ESL
 
 		template<typename F, typename S>
 		friend void DispatchParallel(S states, F&& logic);
+
+		template<typename F, typename S>
+		friend void DispatchEntity(S states, F&& logic, Entity e);
 		
 	};
 
@@ -153,6 +156,7 @@ namespace ESL
 		if constexpr(MPL::size<EntityStates>{} == 0 && !MPL::contain_v<Entity, DecayArgument>) //不进行分派
 		{
 			MPL::rewrap_t<Dispatcher::DispatchHelper, Argument>::Dispatch(states, logic);
+			
 		}
 		else
 		{
@@ -180,6 +184,12 @@ namespace ESL
 	auto Dispatch(States &states, F&& logic)
 	{
 		Dispatch(FetchFor(states, logic), logic);
+	}
+
+	template<typename F>
+	auto DispatchEntity(States &states, F&& logic, Entity e)
+	{
+		DispatchEntity(FetchFor(states, logic), logic, e);
 	}
 
 }

@@ -117,7 +117,7 @@ namespace ESL \
 		
 		
 	public:
-		States() : _entities(CreateState<ESL::Entities>()){}
+		States(HBV::index_t size = 10u, bool spawn = false) : _entities(CreateState<ESL::Entities>(size, spawn)) {}
 
 		void Tick()
 		{
@@ -164,11 +164,11 @@ namespace ESL \
 			});
 		}
 	public:
-		template<typename T>
-		auto &CreateState() noexcept
+		template<typename T, typename... Ts>
+		auto &CreateState(Ts... args) noexcept
 		{
 			using ST = State<T>;
-			auto &state = std::any_cast<ST&>(_states.insert({ typeid(ST).hash_code(), std::any{ ST{} } }).first->second);
+			auto &state = std::any_cast<ST&>(_states.insert({ typeid(ST).hash_code(), std::any{ ST{args...} } }).first->second);
 			RegisterEntityDie(state);
 			return state;
 		}

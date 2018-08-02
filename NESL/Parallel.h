@@ -1,25 +1,26 @@
 #pragma once
 #include <tbb\tbb.h>
-#include <vector>
 #include "HBV.h"
 #include "Dispather.h"
+#include "vector.h"
+#include <iostream>
 
 namespace HBV
 {
+	
+
 	template<typename T, typename F>
 	void for_each_paralell(const T& vec, const F& f)
 	{
 		//just bufferring indices and do it parallel
 		//lazy growing static thread local buffer
-		thread_local static std::vector<index_t> Indices{};
-		Indices.clear();
-
+		thread_local static std::vector<index_t> IndicesBuffer{};
+		IndicesBuffer.clear();
 		for_each(vec, [](index_t id)
 		{
-			Indices.push_back(id);
+			IndicesBuffer.push_back(id);
 		});
-
-		tbb::parallel_for_each(std::begin(Indices), std::end(Indices), [&f](index_t id)
+		tbb::parallel_for_each(std::begin(IndicesBuffer), std::end(IndicesBuffer), [&f](index_t id)
 		{
 			f(id);
 		});
