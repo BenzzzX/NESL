@@ -29,15 +29,11 @@ namespace ESL
 			_alive.grow_to(to);
 		}
 
-		auto GetFree()
+		std::optional<index_t> GetFree()
 		{
-			std::optional<index_t> id{};
-			HBV::for_each<true>(_dead, [&id](index_t i)
-			{
-				id.emplace(i);
-				return false;
-			});
-			return id;
+			if (_dead.empty()) return {};
+
+			return _dead.first();
 		}
 	public:
 		Entities(index_t size = 10u, bool spawn = false) : _generation(size), _dead(size, !spawn), _killed(size), _alive(size, spawn) {}
@@ -64,7 +60,7 @@ namespace ESL
 			Generation &g = _generation[id.value()];
 			_dead.set(id.value(), false);
 			_alive.set(id.value(), true);
-			return Entity{ id.value(), g+1 };
+			return Entity{ id.value(), g + 1 };
 		}
 
 		Entity ForceSpawn()
@@ -79,6 +75,17 @@ namespace ESL
 			_dead.set(id.value(), false);
 			_alive.set(id.value(), true);
 			return Entity{ id.value(), g + 1 };
+		}
+
+		std::pair<index_t, index_t> BatchSpawn(index_t n)
+		{
+			index_t end = _alive.last();
+			Grow(end + n);
+			_alive.set_range(end, end + n, true);
+			_killed.set_range(end, end + n, false);
+			for (index_t i = end; i < end + n; ++i)
+				++_generation[i];
+			return { end ,end + n };
 		}
 
 		bool Alive(Entity e) const

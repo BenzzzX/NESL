@@ -52,23 +52,21 @@ constexpr std::size_t Count = 10'000'000u;
 
 void BenchMark_NESL()
 {
-	ESL::States states(Count, true);
+	ESL::States states;
 	ESL::LogicGraphBuilder graph(states);
+	std::pair<ESL::index_t, ESL::index_t> range;
 	{
 		TimerBlock timer("create 10m entity");
 		auto& locations = states.CreateState<location>(Count);
 		auto& velocities = states.CreateState<velocity>(Count);
-		for (size_t i = 0u; i < Count; i++)
-		{
-			auto e = ESL::Entity{ HBV::index_t(i), 0 };
-			locations.Create(e, { 0, 0 });
-			velocities.Create(e, { 1, 1 });
-		}
+		range = states.BatchSpawnEntity(Count, location{ 0,0 }, velocity{ 1,1 });
 	}
-	auto move = [](const velocity& vel, location& loc)
+	float counter = 0;
+	auto move = [&counter](const velocity& vel, location& loc)
 	{
 		loc.x += vel.x;
 		loc.y += vel.y;
+		counter += vel.x;
 	};
 	graph.Schedule(move, "Move");
 	ESL::LogicGraph logicGraph;
@@ -76,9 +74,9 @@ void BenchMark_NESL()
 	graph.Build(logicGraph);
 	{
 		TimerBlock timer("move 10m entity");
-		for(int i=0;i<100;i++)
-			logicGraph.Flow();
+		logicGraph.Flow();
 	}
+	std::cout << counter << "\n";
 }
 
 

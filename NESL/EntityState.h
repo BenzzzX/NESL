@@ -38,12 +38,35 @@ namespace ESL
 
 		auto *Get(Entity e)
 		{
-			return Contain(e) ? &_container.Get(e) : nullptr;
+			return Contain(e) ? &_container.Get(e.id) : nullptr;
 		}
 
 		const auto *Get(Entity e) const
 		{
-			return Contain(e) ? &_container.Get(e) : nullptr;
+			return Contain(e) ? &_container.Get(e.id) : nullptr;
+		}
+
+		template<typename T, typename = void>
+		struct SupportBatch : std::false_type {};
+
+		template<typename T>
+		struct SupportBatch<T, std::void_t<decltype(&T::BatchCreate)>>
+			: std::true_type {};
+
+		void BatchCreate(index_t begin, index_t end, const value_type_t& arg)
+		{
+			if (_entity.size() <= end)
+				_entity.grow_to(end);
+			_entity.set_range(begin, end, true);
+			if constexpr(SupportBatch<T>{})
+			{
+				_container.BatchCreate(begin, end, arg);
+			}
+			else
+			{
+				for (index_t i = begin; i < end; ++i)
+					_container.Create(i, arg);
+			}
 		}
 
 		auto &Create(Entity e, const value_type_t& arg)
@@ -51,10 +74,10 @@ namespace ESL
 			if (_entity.size() <= e.id)
 				_entity.grow_to(e.id + 1);
 			if (Contain(e))
-				_container.Remove(e);
+				_container.Remove(e.id);
 			else
 				_entity.set(e.id, true);
-			return _container.Create(e, arg);
+			return _container.Create(e.id, arg);
 		}
 
 		bool Contain(Entity e) const
@@ -66,7 +89,7 @@ namespace ESL
 		{
 			if (!Contain(e)) return;
 			_entity.set(e.id, false);
-			_container.Remove(e);
+			_container.Remove(e.id);
 		}
 	};
 
@@ -104,30 +127,30 @@ namespace ESL
 		{
 			_states.resize(sz);
 		}
-		T &Get(Entity e)
+		T &Get(index_t e)
 		{
-			return _states[e.id];
+			return _states[e];
 		}
 
-		const T &Get(Entity e) const
+		const T &Get(index_t e) const
 		{
-			return _states[e.id];
+			return _states[e];
 		}
 
-		T &Create(Entity e, const T& arg)
+		T &Create(index_t e, const T& arg)
 		{
-			if (e.id >= _states.size())
+			if (e >= _states.size())
 			{
-				_states.resize(e.id + 1u);
-				return *(new(&_states[e.id]) T{ arg });
+				_states.resize(e + 1u);
+				return *(new(&_states[e]) T{ arg });
 			}
 			
-			return *(new(&_states[e.id]) T{ arg });
+			return *(new(&_states[e]) T{ arg });
 		}
 
-		void Remove(Entity e)
+		void Remove(index_t e)
 		{
-			_states[e.id].~T();
+			_states[e].~T();
 		}
 	};
 
@@ -140,23 +163,23 @@ namespace ESL
 		{
 			_states.reserve(sz);
 		}
-		T &Get(Entity e)
+		T &Get(index_t e)
 		{
-			return _states.at(e.id);
+			return _states.at(e);
 		}
-		const T &Get(Entity e) const
+		const T &Get(index_t e) const
 		{
-			return _states.at(e.id);
-		}
-
-		T &Create(Entity e, const T& arg)
-		{
-			return _states.insert_or_assign(e.id, T{ arg }).first->second;
+			return _states.at(e);
 		}
 
-		void Remove(Entity e)
+		T &Create(index_t e, const T& arg)
 		{
-			_states.erase(e.id);
+			return _states.insert_or_assign(e, T{ arg }).first->second;
+		}
+
+		void Remove(index_t e)
+		{
+			_states.erase(e);
 		}
 	};
 
@@ -185,17 +208,17 @@ namespace ESL
 			_empty.grow_to(sz, true);
 		}
 
-		T & Get(Entity e)
+		T & Get(index_t e)
 		{
-			return _states[_redirector[e.id]];
+			return _states[_redirector[e]];
 		}
 
-		const T &Get(Entity e) const
+		const T &Get(index_t e) const
 		{
-			return _states[_redirector[e.id]];
+			return _states[_redirector[e]];
 		}
 
-		T &Create(Entity e, const T& arg)
+		T &Create(index_t e, const T& arg)
 		{
 			auto free = GetFree();
 			while (!free.has_value() || free.value() >= _states.size())
@@ -205,16 +228,16 @@ namespace ESL
 				free = GetFree();
 			}
 			_empty.set(free.value(), false);
-			if (e.id >= _redirector.size())
-				_redirector.resize(e.id + 1);
-			_redirector[e.id] = free.value();
-			return *(new(&_states[_redirector[e.id]]) T{ arg });
+			if (e >= _redirector.size())
+				_redirector.resize(e + 1);
+			_redirector[e] = free.value();
+			return *(new(&_states[_redirector[e]]) T{ arg });
 		}
 
-		void Remove(Entity e)
+		void Remove(index_t e)
 		{
-			_empty.set(_redirector[e.id], true);
-			_states[_redirector[e.id]].~T();
+			_empty.set(_redirector[e], true);
+			_states[_redirector[e]].~T();
 		}
 	};
 }

@@ -172,14 +172,38 @@ namespace ESL \
 			RegisterEntityDie(state);
 			return state;
 		}
+
+	private:
 		
+		template<typename T>
+		void BatchSpawnComponent(std::pair<index_t, index_t> es, const T& arg)
+		{
+			auto state = GetState<T>();
+			state->BatchCreate(es.first, es.second, arg);
+		}
+
 	public:
 
-		Entity Spawn()
+		Entity SpawnEntity()
 		{
 			auto e = _entities.Raw().ForceSpawn();
 			return e;
 		}
+
+		template<typename... Ts>
+		std::pair<index_t, index_t> BatchSpawnEntity(index_t n, const Ts&... args)
+		{
+			std::pair<index_t, index_t> es = _entities.Raw().BatchSpawn(n);
+			std::initializer_list<int> _{ (BatchSpawnComponent(es, args),0)... };
+			return es;
+		}
+
+		Entity GetEntity(index_t n)
+		{
+			return _entities.Raw().Get(n);
+		}
+
+
 	};
 
 	/*
