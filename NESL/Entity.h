@@ -33,10 +33,12 @@ namespace ESL
 		{
 			if (_dead.empty()) return {};
 
-			return _dead.first();
+			return first(_dead);
 		}
+
+		friend class States;
 	public:
-		Entities(index_t size = 10u, bool spawn = false) : _generation(size), _dead(size, !spawn), _killed(size), _alive(size, spawn) {}
+		Entities() : _generation(10u), _dead(10u, true), _killed(10u), _alive(10u, false) {}
 
 		void Grow()
 		{
@@ -79,8 +81,9 @@ namespace ESL
 
 		std::pair<index_t, index_t> BatchSpawn(index_t n)
 		{
-			index_t end = _alive.last();
-			Grow(end + n);
+			index_t end = last(_alive) + 1;
+			if(end + n > _generation.size())
+				Grow(end + n);
 			_alive.set_range(end, end + n, true);
 			_killed.set_range(end, end + n, false);
 			for (index_t i = end; i < end + n; ++i)
@@ -94,25 +97,10 @@ namespace ESL
 				&& _alive.contain(e.id);
 		}
 
-		template<typename F>
-		void MergeWith(F&& f)
+		void DoKill()
 		{
-			HBV::for_each(_killed, [this, &f](index_t i)
-			{
-				bool kill = f(Entity{ i, _generation[i] });
-				_dead.set(i, kill);
-				_alive.set(i, !kill);
-			});
-			_killed.clear();
-		}
-
-		void Merge()
-		{
-			HBV::for_each(_killed, [this](index_t i)
-			{
-				_dead.set(i, true);
-				_alive.set(i, false);
-			});
+			_dead.merge(_killed);
+			_alive.merge<true>(_killed);
 			_killed.clear();
 		}
 

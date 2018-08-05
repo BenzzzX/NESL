@@ -8,8 +8,7 @@ namespace ESL
 	template<typename T>
 	struct IsRawState : std::is_same<typename TStateTrait<StateNonstrict<T>>::Raw, T> {};
 
-	template<typename T>
-	struct IsEntityState : std::is_same<typename TStateTrait<StateNonstrict<T>>::Type, TEntityState> {};
+	
 
 	template<typename T>
 	struct IsRawEntityState : std::conjunction<IsRawState<T>, IsEntityState<T>> {};
@@ -17,12 +16,25 @@ namespace ESL
 	class Dispatcher
 	{
 		template<typename... Ts>
-		struct ComposeHelper
+		struct ComposeHelper;
+
+		template<typename U,typename... Ts>
+		struct ComposeHelper<U, Ts...>
 		{
 			template<typename S>
 			static auto ComposeBitVector(S &states)
 			{
-				return HBV::compose(HBV::and_op, MPL::nonstrict_get<const GlobalState<Entities>&>(states).Raw().Available(), MPL::nonstrict_get<const Ts&>(states).Available()...);
+				return HBV::compose(HBV::and_op, MPL::nonstrict_get<const U&>(states).Available(), MPL::nonstrict_get<const Ts&>(states).Available()...);
+			}
+		};
+
+		template<>
+		struct ComposeHelper<>
+		{
+			template<typename S>
+			static auto ComposeBitVector(S &states)
+			{
+				return MPL::nonstrict_get<const GlobalState<Entities>&>(states).Raw().Available();
 			}
 		};
 

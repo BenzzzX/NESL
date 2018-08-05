@@ -46,7 +46,7 @@ public:
 struct location { float x, y; };
 ENTITY_STATE(location, Vec);
 struct velocity { float x, y; };
-ENTITY_STATE(velocity, Vec);
+ENTITY_STATE(velocity, SparseVec);
 
 constexpr std::size_t Count = 10'000'000u;
 
@@ -54,29 +54,29 @@ void BenchMark_NESL()
 {
 	ESL::States states;
 	ESL::LogicGraphBuilder graph(states);
-	std::pair<ESL::index_t, ESL::index_t> range;
 	{
-		TimerBlock timer("create 10m entity");
-		auto& locations = states.CreateState<location>(Count);
-		auto& velocities = states.CreateState<velocity>(Count);
-		range = states.BatchSpawnEntity(Count, location{ 0,0 }, velocity{ 1,1 });
+		TimerBlock timer("spawn 10m entity");
+		states.CreateState<location>();
+		states.CreateState<velocity>();
+		states.BatchSpawnEntity(Count, location{ 0,0 }, velocity{ 1,1 });
 	}
-	float counter = 0;
-	auto move = [&counter](const velocity& vel, location& loc)
+	graph.ScheduleParallel([](const velocity& vel, location& loc)
 	{
 		loc.x += vel.x;
 		loc.y += vel.y;
-		counter += vel.x;
-	};
-	graph.Schedule(move, "Move");
-	ESL::LogicGraph logicGraph;
+	}, "Mover");
+	graph.Schedule([](ESL::Entity self, const ESL::Entities& entities)
+	{
+		entities.Kill(self);
+	}, "Killer");
 	graph.Compile();
+	ESL::LogicGraph logicGraph;
 	graph.Build(logicGraph);
 	{
-		TimerBlock timer("move 10m entity");
+		TimerBlock timer("move and kill 10m entity");
 		logicGraph.Flow();
+		states.Tick();
 	}
-	std::cout << counter << "\n";
 }
 
 
@@ -85,16 +85,12 @@ void BenchMark_LogicGraph()
 	Timer timer;
 
 	timer.begin("create 10m entity");
-	ESL::States states(Count, true);
+	ESL::States states;
 	ESL::LogicGraphBuilder graph(states);
-	auto& locations = states.CreateState<location>(Count);
-	auto& velocities = states.CreateState<velocity>(Count);
-	for (size_t i = 0u; i < Count; i++)
-	{
-		auto e = ESL::Entity{HBV::index_t(i), 0};
-		locations.Create(e, { 0, 0 });
-		velocities.Create(e, { 1, 1 });
-	}
+	std::pair<ESL::index_t, ESL::index_t> range;
+	auto& locations = states.CreateState<location>();
+	auto& velocities = states.CreateState<velocity>();
+	range = states.BatchSpawnEntity(Count, location{ 0,0 }, velocity{ 1,1 });
 	timer.finish();
 
 	auto move = [](const velocity& vel, location& loc)

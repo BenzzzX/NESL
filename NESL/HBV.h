@@ -113,6 +113,17 @@ namespace HBV
 			_layer0 &= ~value_of<0>(id);
 		}
 
+		void bubble_fill(index_t id)
+		{
+			index_t index_3 = index_of<3>(id);
+			if (_layer3[index_3] == EmptyNode)
+			{
+				_layer2[index_of<2>(id)] |= value_of<2>(id);
+				_layer1[index_of<1>(id)] |= value_of<1>(id);
+				_layer0 |= value_of<0>(id);
+			}
+		}
+
 		void set_range_false(index_t begin, index_t end)
 		{
 			index_t startPos = begin;
@@ -209,47 +220,10 @@ namespace HBV
 			_end = to;
 		}
 
-		index_t last() const noexcept
-		{
-			flag_t nodes{};
-			nodes = layer0();
-			if (nodes == EmptyNode) return 0;
-			flag_t prefix{};
-
-			for (int32_t level = 0;; ++level)
-			{
-				index_t high = highbit_pos(nodes);
-				index_t id = prefix | high;
-				if (level >= 3)
-					return id + 1;
-				prefix = flag_t(id) << BitsPerLayer;
-				nodes = layer(level + 1, id);
-			}
-		}
-
 		bool empty()
 		{
 			return layer0() == EmptyNode;
 		}
-
-		index_t first() const noexcept
-		{
-			flag_t nodes{};
-			nodes = layer0();
-			if (nodes == EmptyNode) return 0;
-			flag_t prefix{};
-
-			for (int32_t level = 0;; ++level)
-			{
-				index_t high = lowbit_pos(nodes);
-				index_t id = prefix | high;
-				if (level >= 3)
-					return id + 1;
-				prefix = flag_t(id) << BitsPerLayer;
-				nodes = layer(level + 1, id);
-			}
-		}
-		
 
 		void set_range(index_t begin, index_t end, bool value)
 		{
@@ -292,19 +266,13 @@ namespace HBV
 			if (value)
 			{
 				//bubble for new node
-				if (_layer3[index_3] == EmptyNode)
-				{
-					_layer2[index_of<2>(id)] |= value_of<2>(id);
-					_layer1[index_of<1>(id)] |= value_of<1>(id);
-					_layer0 |= value_of<0>(id);
-				}
+				bubble_fill(id);
 				_layer3[index_3] |= value_3;
 			}
 			else
 			{
 				//bubble for empty node
 				_layer3[index_3] &= ~value_3;
-
 				bubble_empty(id);
 			}
 		}
@@ -315,6 +283,59 @@ namespace HBV
 			std::fill(_layer2.begin(), _layer2.end(), 0u);
 			std::fill(_layer1.begin(), _layer1.end(), 0u);
 			_layer0 = 0u;
+		}
+
+		//NOTE: it won't grow
+		template<bool reverse = false, typename T>
+		void merge(const T& vec)
+		{
+			std::array<HBV::flag_t, LayerCount - 1> nodes{};
+			std::array<index_t, LayerCount - 1> prefix{};
+			if constexpr(reverse)
+				nodes[0] = vec.layer0() & _layer0;
+			else 
+				nodes[0] = vec.layer0();
+			index_t level = 0;
+			if (nodes[0] == EmptyNode) return;
+			for (;;)
+			{
+				index_t low = lowbit_pos(nodes[level]);
+				nodes[level] &= ~(flag_t(1u) << low);
+				index_t id = prefix[level] | low;
+
+				++level;
+				if (level == 3)
+				{
+					if (id >= _layer3.size()) return;
+					
+					HBV::flag_t node = vec.layer3(id);
+					if constexpr(reverse)
+					{
+						_layer3[id] &= !node;
+						bubble_empty(id << BitsPerLayer);
+					}
+					else
+					{
+						bubble_fill(id << BitsPerLayer);
+						_layer3[id] |= node;
+					}
+					do
+					{
+						//root is empty, stop iterating
+						if (level == 0)
+							return;
+						--level;
+					} while (nodes[level] == EmptyNode);
+				}
+				else
+				{
+					if constexpr(reverse)
+						nodes[level] = vec.layer(level, id) & layer(level, id);
+					else
+						nodes[level] = vec.layer(level, id);
+					prefix[level] = id << BitsPerLayer;
+				}
+			}
 		}
 
 		bool contain(index_t id) const noexcept
@@ -531,21 +552,59 @@ namespace HBV
 		return vec.layer0() == 0u;
 	}
 
-
-	template<typename T, typename F>
-	void for_each(const T& vec, const F& f)
+	template<index_t Level = 3, typename T>
+	index_t last(const T& vec) noexcept
 	{
-		std::array<flag_t, LayerCount> nodes{};
-		std::array<index_t, LayerCount> prefix{};
+		flag_t nodes{};
+		nodes = vec.layer0();
+		if (nodes == EmptyNode) return 0;
+		flag_t prefix{};
+
+		for (int32_t level = 0;; ++level)
+		{
+			index_t high = highbit_pos(nodes);
+			index_t id = prefix | high;
+			if (level >= Level)
+				return id;
+			prefix = flag_t(id) << BitsPerLayer;
+			nodes = vec.layer(level + 1, id);
+		}
+	}
+
+	template<index_t Level = 3, typename T>
+	index_t first(const T& vec) noexcept
+	{
+		flag_t nodes{};
+		nodes = vec.layer0();
+		if (nodes == EmptyNode) return 0;
+		flag_t prefix{};
+
+		for (int32_t level = 0;; ++level)
+		{
+			index_t high = lowbit_pos(nodes);
+			index_t id = prefix | high;
+			if (level >= Level)
+				return id;
+			prefix = flag_t(id) << BitsPerLayer;
+			nodes = vec.layer(level + 1, id);
+		}
+	}
+
+
+	template<index_t Level = 3, typename T, typename F>
+	void for_each(const T& vec, const F& f) noexcept
+	{
+		std::array<flag_t, Level + 1> nodes{};
+		std::array<index_t, Level + 1> prefix{};
 		nodes[0] = vec.layer0();
-		int32_t level = 0;
+		index_t level = 0;
 		if (nodes[0] == EmptyNode) return;
 		for (;;)
 		{
 			index_t low = lowbit_pos(nodes[level]);
 			nodes[level] &= ~(flag_t(1u) << low);
 			index_t id = prefix[level] | low;
-			if (level < 3) //leaf node, iterate sibling
+			if (level < Level) //leaf node, iterate sibling
 			{
 				++level;
 				nodes[level] = vec.layer(level, id);

@@ -2,6 +2,8 @@
 #include <any>
 #include <unordered_map>
 #include <functional>
+#include <bitset>
+#include <atomic>
 #include "GlobalState.h"
 #include "Entity.h"
 #include "EntityState.h"
@@ -108,25 +110,24 @@ namespace ESL \
 	template<typename T>
 	using StateStrict = typename TStateStrict<T>::type;
 
+	template<typename T>
+	struct IsEntityState : std::is_same<typename TStateTrait<StateNonstrict<T>>::Type, TEntityState> {};
+
 	class States
 	{
 		std::unordered_map<std::size_t, std::any> _states;
-		std::vector<std::function<void(Entity)>> _onEntityDie;
+		std::vector<std::function<void(const HBV::bit_vector&)>> _onDoKill;
 		GlobalState<ESL::Entities>& _entities;
-
-		
 		
 	public:
-		States(HBV::index_t size = 10u, bool spawn = false) : _entities(CreateState<ESL::Entities>(size, spawn)) {}
+		States() : _entities(CreateState<ESL::Entities>()) {}
 
 		void Tick()
 		{
-			_entities.Raw().MergeWith([this](Entity e)
-			{
-				for (auto &f : _onEntityDie)
-					f(e);
-				return true;
-			});
+			auto& entities = _entities.Raw();
+			for (auto &f : _onDoKill)
+				f(entities._killed);
+			entities.DoKill();
 		}
 
 		auto& Entities()
@@ -149,27 +150,31 @@ namespace ESL \
 			}
 		}
 
-
-
 	private:
-		template<typename T>
-		void RegisterEntityDie(T& any) {}
 
 		template<typename T>
-		void RegisterEntityDie(EntityState<T>& state)
+		void RegisterEntityDie(T& state)
 		{
-			_onEntityDie.emplace_back([&state](Entity e)
+			_onDoKill.emplace_back([&state](const HBV::bit_vector& remove)
 			{
-				state.Remove(e);
+				state.BatchRemove(remove);
 			});
 		}
 	public:
-		template<typename T, typename... Ts>
-		auto &CreateState(Ts... args) noexcept
+		template<typename T, std::enable_if_t<IsEntityState<State<T>>::value, int> = 0>
+		auto &CreateState() noexcept
 		{
 			using ST = State<T>;
-			auto &state = std::any_cast<ST&>(_states.insert({ typeid(ST).hash_code(), std::any{ ST{args...} } }).first->second);
+			auto &state = std::any_cast<ST&>(_states.insert({ typeid(ST).hash_code(), std::make_any<ST>()}).first->second);
 			RegisterEntityDie(state);
+			return state;
+		}
+
+		template<typename T, typename... Ts>
+		auto &CreateState(Ts&&... args) noexcept
+		{
+			using ST = State<T>;
+			auto &state = std::any_cast<ST&>(_states.insert({ typeid(ST).hash_code(), std::make_any<ST>(args...) }).first->second);
 			return state;
 		}
 
@@ -205,28 +210,5 @@ namespace ESL \
 
 
 	};
-
-	/*
-	template<typename... Ts>
-	class SubStates
-	{
-		using arg_types = MPL::map_t<State, MPL::typelist<Ts...>>; 
-		template<typename T>
-		struct Checker {
-			static_assert(IsEntityState<T>{}, "must be entity state!");
-		};
-		using _ = MPL::map_t<Checker, arg_types>;
-		template<typename T>
-		using ref_t = T & ;
-	public:
-		using types = MPL::concat_t<MPL::typelist<const Entities>, arg_types>;
-
-
-	private:
-		using ref_types = MPL::map_t<ref_t, types>;
-		using tuple_type = MPL::rewrap_t<std::tuple, ref_types>;
-		tuple_type _refs;
-	};
-	*/
 }
 

@@ -7,22 +7,28 @@
 
 namespace HBV
 {
-	
-
 	template<typename T, typename F>
 	void for_each_paralell(const T& vec, const F& f)
 	{
 		//just bufferring indices and do it parallel
 		//lazy growing static thread local buffer
-		thread_local static std::vector<index_t> IndicesBuffer{};
-		IndicesBuffer.clear();
-		for_each(vec, [](index_t id)
+		std::vector<index_t> IndicesBuffer{};
+		index_t size = HBV::last<2>(vec) + 1;
+		IndicesBuffer.reserve(size);
+		for_each<2>(vec, [&IndicesBuffer](index_t id)
 		{
 			IndicesBuffer.push_back(id);
 		});
-		tbb::parallel_for_each(std::begin(IndicesBuffer), std::end(IndicesBuffer), [&f](index_t id)
+		tbb::parallel_for_each(std::begin(IndicesBuffer), std::end(IndicesBuffer), [&f, &vec](index_t id)
 		{
-			f(id);
+			HBV::flag_t node = vec.layer3(id);
+			index_t prefix = id << HBV::BitsPerLayer;
+			do
+			{
+				index_t low = HBV::lowbit_pos(node);
+				node &= ~(HBV::flag_t(1) << low);
+				f(prefix | low);
+			} while (node); 
 		});
 	}
 }

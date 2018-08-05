@@ -65,7 +65,7 @@ auto Logic_Spawn(
 
 void Register(ESL::States& st, ESL::LogicGraphBuilder& graph)
 {
-	auto e = st.Spawn();
+	auto e = st.SpawnEntity();
 	st.CreateState<EVelocity>().Create(e, { 5,0 });
 	st.CreateState<ELocation>().Create(e, { 5,5 });
 	st.CreateState<ELifeTime>();

@@ -51,6 +51,9 @@
     <ClInclude Include="small_vector.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Flatten.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="BenchMark.cpp">

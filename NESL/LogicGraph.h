@@ -61,7 +61,7 @@ namespace ESL
 			template<typename... Ts>
 			void After(Ts&&... args)
 			{
-				std::initializer_list<int32_t> _{ (dependencies.push_back(std::forward<Ts>(args)),0)... };
+				std::initializer_list<int32_t> _{ (dependencies.emplace_back(std::forward<Ts>(args)),0)... };
 			}
 		};
 
