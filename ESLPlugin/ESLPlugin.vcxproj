@@ -83,6 +83,7 @@
     <LinkIncremental>true</LinkIncremental>
     <IncludePath>$(IncludePath);$(SolutionDir)NESL\tbb\include</IncludePath>
     <LibraryPath>$(LibraryPath);$(SolutionDir)NESL\tbb\lib</LibraryPath>
+    <OutDir>$(SolutionDir)ESLConsole\plugin</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>

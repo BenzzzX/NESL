@@ -311,7 +311,7 @@ namespace HBV
 					HBV::flag_t node = vec.layer3(id);
 					if constexpr(reverse)
 					{
-						_layer3[id] &= !node;
+						_layer3[id] &= ~node;
 						bubble_empty(id << BitsPerLayer);
 					}
 					else

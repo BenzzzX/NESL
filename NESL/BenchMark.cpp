@@ -1,6 +1,7 @@
 #include <chrono>
 #include <iostream>
 #include "LogicGraph.h"
+#include "Flatten.h"
 
 
 class TimerBlock {
@@ -60,23 +61,26 @@ void BenchMark_NESL()
 		states.CreateState<velocity>();
 		states.BatchSpawnEntity(Count, location{ 0,0 }, velocity{ 1,1 });
 	}
-	graph.ScheduleParallel([](const velocity& vel, location& loc)
+	float counter = 0;
+	graph.Schedule([&counter](const velocity& vel, location& loc)
 	{
 		loc.x += vel.x;
 		loc.y += vel.y;
+		counter += vel.y;
 	}, "Mover");
-	graph.Schedule([](ESL::Entity self, const ESL::Entities& entities)
+	/*graph.Schedule([](ESL::Entity self, const ESL::Entities& entities)
 	{
 		entities.Kill(self);
-	}, "Killer");
+	}, "Killer");*/
 	graph.Compile();
 	ESL::LogicGraph logicGraph;
 	graph.Build(logicGraph);
 	{
 		TimerBlock timer("move and kill 10m entity");
 		logicGraph.Flow();
-		states.Tick();
+		/*states.Tick();*/
 	}
+	std::cout << counter << "\n";
 }
 
 
@@ -98,7 +102,7 @@ void BenchMark_LogicGraph()
 		loc.x += vel.x;
 		loc.y += vel.y;
 	};
-	graph.ScheduleParallel(move, "Move");
+	graph.Schedule(move, "Move");
 	ESL::LogicGraph logicGraph;
 	graph.Compile();
 	graph.Build(logicGraph);

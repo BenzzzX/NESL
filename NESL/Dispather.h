@@ -13,7 +13,7 @@ namespace ESL
 	template<typename T>
 	struct IsRawEntityState : std::conjunction<IsRawState<T>, IsEntityState<T>> {};
 
-	class Dispatcher
+	namespace Dispatcher
 	{
 		template<typename... Ts>
 		struct ComposeHelper;
@@ -22,7 +22,7 @@ namespace ESL
 		struct ComposeHelper<U, Ts...>
 		{
 			template<typename S>
-			static auto ComposeBitVector(S &states)
+			__forceinline static auto ComposeBitVector(S &states)
 			{
 				return HBV::compose(HBV::and_op, MPL::nonstrict_get<const U&>(states).Available(), MPL::nonstrict_get<const Ts&>(states).Available()...);
 			}
@@ -32,7 +32,7 @@ namespace ESL
 		struct ComposeHelper<>
 		{
 			template<typename S>
-			static auto ComposeBitVector(S &states)
+			__forceinline static auto ComposeBitVector(S &states)
 			{
 				return MPL::nonstrict_get<const GlobalState<Entities>&>(states).Raw().Available();
 			}
@@ -43,16 +43,13 @@ namespace ESL
 		struct EntityDispatchHelper
 		{
 			template<typename T, typename S>
-			static decltype(auto) Take(S &states, index_t id, std::true_type)
+			__forceinline static decltype(auto) Take(S &states, index_t id, std::true_type)
 			{
-				auto &state = MPL::nonstrict_get<StateStrict<T>&>(states);
-
-				Entity e = MPL::nonstrict_get<const GlobalState<Entities>&>(states).Raw().Get(id);
-				return *state.Get(e);
+				return MPL::nonstrict_get<const State<T>&>(states).Get(id);
 			}
 
 			template<typename T, typename S>
-			static decltype(auto) Take(S &states, index_t id, std::false_type)
+			__forceinline static decltype(auto) Take(S &states, index_t id, std::false_type)
 			{
 				if constexpr(std::is_same<T, Entity>{})
 				{
@@ -60,22 +57,24 @@ namespace ESL
 				}
 				else
 				{
-					auto &state = MPL::nonstrict_get<StateStrict<T>&>(states);
-					if constexpr(IsRawState<std::decay_t<T>>{}) //GlobalState自动解包
+					
+					if constexpr(IsRawState<T>{}) //GlobalState自动解包
 					{
+						auto &state = MPL::nonstrict_get<const State<T>&>(states);
 						return state.Raw();
 					}
 					else 
 					{
+						auto &state = MPL::nonstrict_get<const T&>(states);
 						return state;
 					}
 				}
 			}
 
 			template<typename F, typename S>
-			static void Dispatch(S &states, index_t id, F&& f)
+			__forceinline static void Dispatch(S &states, index_t id, F&& f)
 			{
-				f(Take<Ts>(states, id, IsRawEntityState<std::decay_t<Ts>>{})...);
+				f(Take<Ts>(states, id, IsRawEntityState<Ts>{})...);
 			}
 		};
 
@@ -83,10 +82,10 @@ namespace ESL
 		struct DispatchHelper
 		{
 			template<typename T, typename S>
-			static auto& Take(S &states)
+			__forceinline static auto& Take(S &states)
 			{
-				auto& state = MPL::nonstrict_get<StateStrict<T>&>(states);
-				if constexpr(IsRawState<std::decay_t<T>>{})
+				auto& state = MPL::nonstrict_get<const State<T>&>(states);
+				if constexpr(IsRawState<T>{})
 				{
 					return state.Raw();
 				}
@@ -95,7 +94,7 @@ namespace ESL
 			}
 
 			template<typename F, typename S>
-			static void Dispatch(S &states, F&& f)
+			__forceinline static void Dispatch(S &states, F&& f)
 			{
 				f(Take<Ts>(states)...);
 			}
@@ -105,13 +104,13 @@ namespace ESL
 		struct FetchHelper
 		{
 			template<typename T>
-			static T& Take(States &states)
+			__forceinline static T& Take(States &states)
 			{
 				using Raw = typename TStateTrait<std::decay_t<T>>::Raw;
 				return *states.GetState<Raw>();
 			}
 
-			static auto Fetch(States &states)
+			__forceinline static auto Fetch(States &states)
 			{
 				return std::tie(Take<Ts>(states)...);
 			}
@@ -125,20 +124,6 @@ namespace ESL
 
 			using type = MPL::fliter_t<Cond, S>;
 		};
-	public:
-		template<typename F>
-		friend auto FetchFor(States &states, F&& logic);
-
-
-		template<typename F, typename S>
-		friend void Dispatch(S states, F&& logic);
-
-
-		template<typename F, typename S>
-		friend void DispatchParallel(S states, F&& logic);
-
-		template<typename F, typename S>
-		friend void DispatchEntity(S states, F&& logic, Entity e);
 		
 	};
 
@@ -167,7 +152,7 @@ namespace ESL
 
 		if constexpr(MPL::size<EntityStates>{} == 0 && !MPL::contain_v<Entity, DecayArgument>) //不进行分派
 		{
-			MPL::rewrap_t<Dispatcher::DispatchHelper, Argument>::Dispatch(states, logic);
+			MPL::rewrap_t<Dispatcher::DispatchHelper, DecayArgument>::Dispatch(states, logic);
 			
 		}
 		else
@@ -175,7 +160,7 @@ namespace ESL
 			const auto available = MPL::rewrap_t<Dispatcher::ComposeHelper, EntityStates>::ComposeBitVector(states);
 			HBV::for_each(available, [&states, &logic](index_t i) //分派
 			{
-				MPL::rewrap_t<Dispatcher::EntityDispatchHelper, Argument>::Dispatch(states, i, logic);
+				MPL::rewrap_t<Dispatcher::EntityDispatchHelper, DecayArgument>::Dispatch(states, i, logic);
 			});
 		}
 	}
@@ -187,10 +172,9 @@ namespace ESL
 		using Argument = typename Trait::argument_type;
 		if (MPL::nonstrict_get<const GlobalState<Entities>&>(states).Raw().Alive(e))
 		{
-			MPL::rewrap_t<Dispatcher::EntityDispatchHelper, Argument>::Dispatch(states, e.id, logic);
+			MPL::rewrap_t<Dispatcher::EntityDispatchHelper, DecayArgument>::Dispatch(states, e.id, logic);
 		}
 	}
-
 
 	template<typename F>
 	auto Dispatch(States &states, F&& logic)

@@ -9,6 +9,7 @@
 #include <iostream>
 #include <tbb\tbb.h>
 #include "Parallel.h"
+#include "Flatten.h"
 
 
 namespace ESL
@@ -36,7 +37,7 @@ namespace ESL
 		}
 	};
 
-
+	//TODO: Support replace scheduled logic
 	class LogicGraphBuilder
 	{
 		struct StateNode;
@@ -115,7 +116,7 @@ namespace ESL
 			auto &succs = node->_successors;
 			if (std::find(succs.begin(), succs.end(), succ) == succs.end())
 			{
-				std::cerr << "Implicit dependency between [" << succ->_name.c_str() << "] and [" << node->_name.c_str() << "] due to conflict on state ["<< _stateInfos[id]._name <<"].\n";
+				std::cerr << "Warning: Implicit dependency between [" << succ->_name.c_str() << "] and [" << node->_name.c_str() << "] due to conflict on state ["<< _stateInfos[id]._name <<"].\n";
 				succs.push_back(succ); 
 				if (implicit) node->_implicitSuccessors.insert(succ);
 			}
@@ -212,19 +213,9 @@ namespace ESL
 			}
 		}
 
-	public:
-		LogicGraphBuilder(States& states) : states(states) {}
-
-		template<typename F>
-		LogicNode& Schedule(F&& f, std::string name)
+		template<typename S>
+		LogicNode& InitNode(LogicNode& node, const S& fetchedStates)
 		{
-			auto fetchedStates = FetchFor(states, f);
-			LogicNode& node = _logicNodes[name];
-			node._name = name;
-			node._dispatcher = [fetchedStates, f = std::forward<F>(f)]()
-			{
-				Dispatch(fetchedStates, f);
-			};
 			node._reads.clear();
 			node._writes.clear();
 			MPL::for_tuple(fetchedStates, [&node, this](auto &wrapper)
@@ -248,6 +239,22 @@ namespace ESL
 			return node;
 		}
 
+	public:
+		LogicGraphBuilder(States& states) : states(states) {}
+
+		template<typename F>
+		LogicNode& Schedule(F&& f, std::string name)
+		{
+			auto fetchedStates = FetchFor(states, f);
+			LogicNode& node = _logicNodes[name];
+			node._name = name;
+			node._dispatcher = [fetchedStates, f = std::forward<F>(f)]()
+			{
+				Dispatch(fetchedStates, f);
+			};
+			return InitNode(node, fetchedStates);
+		}
+
 		template<typename F>
 		LogicNode& ScheduleParallel(F&& f, std::string name)
 		{
@@ -259,27 +266,20 @@ namespace ESL
 			{
 				DispatchParallel(fetchedStates, f);
 			};
-			node._reads.clear();
-			node._writes.clear();
-			MPL::for_tuple(fetchedStates, [&node, this](auto &wrapper)
+			return InitNode(node, fetchedStates);
+		}
+
+		template<typename F>
+		LogicNode& ScheduleFlatten(F&& f, std::string name)
+		{
+			auto fetchedStates = FetchFor(states, f);
+			LogicNode& node = _logicNodes[name];
+			node._name = name;
+			node._dispatcher = [fetchedStates, f = std::forward<F>(f)]()
 			{
-				using type = decltype(wrapper);
-				using intern = typename TStateTrait<std::decay_t<type>>::Raw;
-				std::size_t id = typeid(type).hash_code();
-
-				if (_stateInfos.find(id) == _stateInfos.end())
-				{
-					auto& stateInfo = _stateInfos[id];
-					stateInfo._name = typeid(intern).name() + 8;
-					stateInfo._isGlobal = std::is_same_v<State<intern>, GlobalState<intern>>;
-				}
-
-				if constexpr(MPL::is_const_v<type>)
-					node._reads.push_back(id);
-				else
-					node._writes.push_back(id);
-			});
-			return node;
+				DispatchFlatten(fetchedStates, f);
+			};
+			return InitNode(node, fetchedStates);
 		}
 
 		void Compile()

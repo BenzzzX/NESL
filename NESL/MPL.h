@@ -117,7 +117,8 @@ namespace MPL
 		1 + index<T, typelist<Ts...>>::value> {};
 
 
-	template <typename T, typename Typelist> struct contain;
+	template <typename T, typename Typelist> 
+	struct contain : std::false_type {};
 
 	template <typename T, typename... Ts> 
 	struct contain<T, typelist<Ts...>> 

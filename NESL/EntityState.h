@@ -76,7 +76,6 @@ namespace ESL
 					});
 				}
 				_container.BatchRemove(HBV::compose(HBV::and_op, remove, _entity));
-				_entity.merge<true>(remove);
 			}
 			else
 			{
@@ -84,8 +83,8 @@ namespace ESL
 				{
 					_container.Remove(i);
 				});
-				_entity.merge<true>(remove);
 			}
+			_entity.merge<true>(remove);
 		}
 		
 	public:
@@ -113,37 +112,39 @@ namespace ESL
 			return _entity;
 		}
 
-		auto *Get(Entity e)
+		auto &Get(index_t e)
 		{
-			return Contain(e) ? &_container.Get(e.id) : nullptr;
+			assert(Contain(e));
+			return _container.Get(e);
 		}
 
-		const auto *Get(Entity e) const
+		const auto &Get(index_t e) const
 		{
-			return Contain(e) ? &_container.Get(e.id) : nullptr;
+			assert(Contain(e));
+			return _container.Get(e);
 		}
 
-		auto &Create(Entity e, const value_type_t& arg)
+		auto &Create(index_t e, const value_type_t& arg)
 		{
-			if (_entity.size() <= e.id)
-				_entity.grow_to(e.id + 1);
+			if (_entity.size() <= e)
+				_entity.grow_to(e + 1);
 			if (Contain(e))
-				_container.Remove(e.id);
+				_container.Remove(e);
 			else
-				_entity.set(e.id, true);
-			return _container.Create(e.id, arg);
+				_entity.set(e, true);
+			return _container.Create(e, arg);
 		}
 
-		bool Contain(Entity e) const
+		bool Contain(index_t e) const
 		{
-			return _entity.contain(e.id);
+			return _entity.contain(e);
 		}
 
-		void Remove(Entity e)
+		void Remove(index_t e)
 		{
 			if (!Contain(e)) return;
-			_entity.set(e.id, false);
-			_container.Remove(e.id);
+			_entity.set(e, false);
+			_container.Remove(e);
 		}
 	};
 

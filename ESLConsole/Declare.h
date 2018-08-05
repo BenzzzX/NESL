@@ -1,16 +1,14 @@
 #pragma once
 
 #include "../NESL/NESL.h"
+#include <Windows.h>
 
 
 #pragma region States
 
 using GEntities = ESL::Entities;
 
-struct GFrame { uint64_t total; };
-GLOBAL_STATE(GFrame);
-
-struct GCanvas { };
+struct GCanvas { HANDLE handle; };
 GLOBAL_STATE(GCanvas);
 
 struct EAppearance { char v; }; //显示的字符
@@ -25,18 +23,20 @@ ENTITY_STATE(EVelocity, Vec);
 struct ELifeTime { int32_t n; }; //计时死亡
 ENTITY_STATE(ELifeTime, Vec);
 
-struct ESpawner { int32_t life; }; //生成计时死亡的实体
-ENTITY_STATE(ESpawner, Hash);
+struct ELength { int32_t life; }; //生成计时死亡的实体
+ENTITY_STATE(ELength, Vec);
 
 #pragma endregion
 
 
-auto Logic_Spawn(const ESpawner& sp, const ELocation& loc, GEntities& entities,
+auto Logic_Spawn(const ELength& sp, const ELocation& loc, GEntities& entities,
 	ESL::State<ELifeTime>& lifetimes, ESL::State<ELocation>& locations,
 	ESL::State<EAppearance>& appearances);
 
 auto Logic_LifeTime(ELifeTime& life, ESL::Entity self, const GEntities& entities);
 
-auto Logic_Move(ELocation& loc, EVelocity& vel, const GCanvas& canvas);
+auto Logic_Move(ELocation& loc, EVelocity& vel);
 
-auto Logic_Draw(const ELocation& loc, const EAppearance& ap, const GCanvas& canvas);
+auto Logic_Draw(const ELocation& loc, const EAppearance& ap, GCanvas& canvas);
+
+auto Logic_Clear(const ELifeTime& life, EAppearance& ap);

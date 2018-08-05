@@ -12,9 +12,8 @@ namespace HBV
 	{
 		//just bufferring indices and do it parallel
 		//lazy growing static thread local buffer
-		std::vector<index_t> IndicesBuffer{};
-		index_t size = HBV::last<2>(vec) + 1;
-		IndicesBuffer.reserve(size);
+		lni::vector<index_t> IndicesBuffer;
+		IndicesBuffer.reserve(64u);
 		for_each<2>(vec, [&IndicesBuffer](index_t id)
 		{
 			IndicesBuffer.push_back(id);
@@ -46,14 +45,14 @@ namespace ESL
 
 		if constexpr(MPL::size<EntityStates>{} == 0 && !MPL::contain_v<Entity, DecayArgument>) //不进行分派
 		{
-			MPL::rewrap_t<Dispatcher::DispatchHelper, Argument>::Dispatch(states, logic);
+			MPL::rewrap_t<Dispatcher::DispatchHelper, DecayArgument>::Dispatch(states, logic);
 		}
 		else
 		{
 			const auto available = MPL::rewrap_t<Dispatcher::ComposeHelper, EntityStates>::ComposeBitVector(states);
 			HBV::for_each_paralell(available, [&states, &logic](index_t i) //分派
 			{
-				MPL::rewrap_t<Dispatcher::EntityDispatchHelper, Argument>::Dispatch(states, i, logic);
+				MPL::rewrap_t<Dispatcher::EntityDispatchHelper, DecayArgument>::Dispatch(states, i, logic);
 			});
 		}
 	}

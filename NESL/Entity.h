@@ -21,13 +21,7 @@ namespace ESL
 		HBV::bit_vector _alive;
 		HBV::bit_vector _killed;
 
-		void Grow(index_t to)
-		{
-			_dead.grow_to(to, true);
-			_generation.resize(to, 0u);
-			_killed.grow_to(to);
-			_alive.grow_to(to);
-		}
+		
 
 		std::optional<index_t> GetFree()
 		{
@@ -40,9 +34,25 @@ namespace ESL
 	public:
 		Entities() : _generation(10u), _dead(10u, true), _killed(10u), _alive(10u, false) {}
 
+		void Grow(index_t to)
+		{
+			_dead.grow_to(to, true);
+			_generation.resize(to, 0u);
+			_killed.grow_to(to);
+			_alive.grow_to(to);
+		}
+
 		void Grow()
 		{
 			Grow(_generation.size() * 2u);
+		}
+
+		void TryGrow()
+		{
+			if (!GetFree().has_value())
+			{
+				Grow();
+			}
 		}
 
 		const HBV::bit_vector& Available() const
