@@ -535,6 +535,7 @@ namespace HBV
 	template<typename F, typename... Ts>
 	const auto &compose(F&& f, const Ts&... args)
 	{
+		//Hack!!
 		using type = bit_vector_composer<F, Ts...>;
 		static char cache[sizeof(type)];
 		return *(type*)(new (&cache) type{ std::forward<F>(f), args... });
