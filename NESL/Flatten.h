@@ -24,6 +24,10 @@ namespace ESL
 				{
 					return std::get<Entity*>(datas)[id];
 				}
+				else if constexpr(is_filter<T>::value)
+				{
+					return T{};
+				}
 				else
 				{
 					auto &state = MPL::nonstrict_get<const T&>(states);
@@ -54,13 +58,18 @@ namespace ESL
 		using Trait = MPL::generic_function_trait<std::decay_t<F>>;
 		using Argument = typename Trait::argument_type;
 		using DecayArgument = MPL::map_t<std::decay_t, Argument>;
-		using States = MPL::fliter_t<IsState, DecayArgument>;
-		using RawEntityState = MPL::fliter_t<IsRawEntityState, States>;
-		using EntityStates = MPL::map_t<State, RawEntityState>;
-		using PerEntityData = MPL::concat_t<MPL::typelist<Entity>, RawEntityState>;
-		static_assert(MPL::size<EntityStates>{} != 0 || MPL::contain_v<Entity, DecayArgument>, "wrong parameter");
+		using States = MPL::filter_t<IsState, DecayArgument>;
+		using RawEntityState = MPL::filter_t<IsRawEntityState, States>;
+
+		using ExplictFilters = MPL::filter_t<is_filter, DecayArgument>;
+		using ImplictFilters = MPL::map_t<Has, RawEntityStates>;
+		using Filters = MPL::concat_t<ExplictFilters, ImplictFilters>;
+		using Checkers = typename MPL::map_t<Dispatcher::CheckFilters<Filters>::Checker, Filters>;
 		
-		const auto available = MPL::rewrap_t<Dispatcher::ComposeHelper, EntityStates>::ComposeBitVector(states);
+		using PerEntityData = MPL::concat_t<MPL::typelist<Entity>, RawEntityState>;
+		static_assert(MPL::size<Filters>{} != 0 || MPL::contain_v<Entity, DecayArgument>, "wrong parameter");
+		
+		const auto available = MPL::rewrap_t<Dispatcher::ComposeHelper, Filters>::ComposeBitVector(states);
 		using DataArrays = MPL::map_t<std::add_pointer_t, PerEntityData>;
 		MPL::rewrap_t<std::tuple, DataArrays> dataArrays;
 		lni::vector<index_t> indexArray;
@@ -73,13 +82,12 @@ namespace ESL
 		MPL::for_tuple(dataArrays, [size, &states, &indexArray](auto& point)
 		{
 			using type = std::remove_pointer_t<std::remove_reference_t<decltype(point)>>;
-			
 			if constexpr(!std::is_same_v<type, Entity>)
 			{
 				auto state = MPL::nonstrict_get<const State<type>&>(states);
-				point = (type*)malloc(sizeof(type)*size);
+				point = (type*)malloc(sizeof(type)*size); //分配数组
 				for (int i = 0; i < size; ++i)
-					point[i] = state.Get(indexArray[i]);
+					point[i] = state.Get(indexArray[i]); //取出数据,整理到数组
 			}
 			else
 			{
@@ -90,7 +98,7 @@ namespace ESL
 			}
 		});
 
-		for (int i = 0; i < size; ++i)
+		for (int i = 0; i < size; ++i) //在数组上执行函数
 			MPL::rewrap_t<Dispatcher::FlattenDispatchHelper, DecayArgument>::Dispatch(states, i, dataArrays, logic);
 
 		MPL::for_tuple(dataArrays, [size, &states, &indexArray](auto point)
@@ -101,7 +109,7 @@ namespace ESL
 				{
 					auto state = std::get<State<type>&>(states);
 					for (int i = 0; i < size; ++i)
-						state.Get(indexArray[i]) = point[i];
+						state.Get(indexArray[i]) = point[i]; //写回非const数据
 				}
 			free(point);
 		});

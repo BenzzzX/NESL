@@ -29,15 +29,6 @@ namespace MPL
 
 	template <typename... Ts> struct typelist {};
 
-	template<typename T>
-	struct unwrap;
-
-	template<template<typename> class V, typename T>
-	struct unwrap<V<T>> { using type = T; };
-
-	template<typename T>
-	using unwrap_t = typename unwrap<T>::type;
-
 	template <typename T> 
 	struct type_t { using type = T; };
 
@@ -79,23 +70,23 @@ namespace MPL
 	template <template <typename> class F, typename T>
 	using map_t = typename map<F, T>::type;
 
-	template <template <typename> class, typename> struct fliter;
+	template <template <typename> class, typename> struct filter;
 
 	template <template <typename> class F, typename T>
-	using fliter_t = typename fliter<F, T>::type;
+	using filter_t = typename filter<F, T>::type;
 
 	template <template <typename> class F> 
-	struct fliter<F, typelist<>> 
+	struct filter<F, typelist<>> 
 	{ using type = typelist<>; };
 
 	template <template <typename> class F, typename T, typename... Ts>
-	struct fliter<F, typelist<T, Ts...>> 
+	struct filter<F, typelist<T, Ts...>> 
 	{
 		using type = std::conditional_t
 		<
 			F<T>::value,
-			concat_t<typelist<T>, fliter_t<F, typelist<Ts...>>>,
-			fliter_t<F, typelist<Ts...>>
+			concat_t<typelist<T>, filter_t<F, typelist<Ts...>>>,
+			filter_t<F, typelist<Ts...>>
 		>;
 	};
 
@@ -153,7 +144,7 @@ namespace MPL
 	struct intersection 
 	{
 		template <typename Y> using is_in_U = contain<Y, U>;
-		using type = fliter_t<is_in_U, T>;
+		using type = filter_t<is_in_U, T>;
 	};
 
 	template <typename T, typename U>
@@ -166,7 +157,7 @@ namespace MPL
 	struct remove 
 	{
 		template <typename Y> using is_not_T = std::negation<std::is_same<Y, T>>;
-		using type = fliter_t<is_not_T, U>;
+		using type = filter_t<is_not_T, U>;
 	};
 
 	template <typename T, typename U>

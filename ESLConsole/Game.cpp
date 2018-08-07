@@ -3,6 +3,7 @@
 #include <thread>
 #include "Declare.h"
 #include <io.h>
+#include "../NESL/Trace.h"
 
 template<int32_t min, int32_t max>
 int32_t map(int32_t val)
@@ -59,10 +60,10 @@ void Register(ESL::States& st, ESL::LogicGraphBuilder& graph)
 	auto e = st.SpawnEntity();
 	st.Entities().Grow(200);
 	st.CreateState<EVelocity>().Create(e.id, { 1,0 });
-	st.CreateState<ELocation>().Create(e.id, { 5,20 });
+	st.CreateState<ELocation>().Create(e.id, { 6,20 });
 	st.CreateState<ELifeTime>();
 	st.CreateState<EAppearance>().Create(e.id, { '@' });
-	st.CreateState<ELength>().Create(e.id, { 80 });
+	st.CreateState<ELength>().Create(e.id, { 10 });
 	st.CreateState<GCanvas>(GetStdHandle(STD_OUTPUT_HANDLE));
 
 	graph.Schedule(Logic_Draw, "Draw");
@@ -126,7 +127,7 @@ int main()
 		using namespace std::chrono;
 		logicGraph.Flow();
 		st.Tick();
-		std::this_thread::sleep_for(100ms);
+		std::this_thread::sleep_for(1000ms);
 	}
 
 #pragma endregion

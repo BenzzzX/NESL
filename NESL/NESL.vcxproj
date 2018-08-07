@@ -183,6 +183,7 @@
     <ClInclude Include="Parallel.h" />
     <ClInclude Include="small_vector.h" />
     <ClInclude Include="States.h" />
+    <ClInclude Include="Trace.h" />
     <ClInclude Include="vector.h" />
   </ItemGroup>
   <ItemGroup>

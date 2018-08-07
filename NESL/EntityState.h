@@ -3,6 +3,7 @@
 #include "Entity.h"
 #include <unordered_map>
 #include "MPL.h"
+#include "Trace.h"
 
 namespace ESL
 {
@@ -19,10 +20,29 @@ namespace ESL
 	class Vec;
 
 	template<typename T>
+	class Flag;
+
+	template<typename T, typename = void>
+	struct SupportBatchCreate : std::false_type {};
+	template<typename T>
+	struct SupportBatchCreate<T, std::void_t<decltype(&T::BatchCreate)>>
+		: std::true_type {};
+
+	template<typename T, typename = void>
+	struct SupportBatchRemove : std::false_type {};
+	template<typename T>
+	struct SupportBatchRemove<T, std::void_t<decltype(&T::BatchRemove)>>
+		: std::true_type {};
+
+	using bit_vector_and2 = decltype(HBV::compose(HBV::and_op, HBV::bit_vector{}, HBV::bit_vector{}));
+
+	template<typename T, Trace... types>
 	class EntityState
 	{
 		HBV::bit_vector _entity;
 		T _container;
+
+		std::tuple<Tracer<types>...> _tracers;
 
 		template<typename T>
 		struct value_type;
@@ -32,23 +52,14 @@ namespace ESL
 
 		using value_type_t = typename value_type<T>::type;
 
-		template<template<typename> class container>
-		static constexpr auto is_container_v = std::is_same_v<T, container<value_type_t>>;
-
 		friend class States;
-
-#define SupportFunctionTrait(name) \
-		template<typename T, typename = void> \
-		struct Support##name : std::false_type {}; \
-		template<typename T> \
-		struct Support##name<T, std::void_t<decltype(&T::name)>> \
-			: std::true_type {}
-
-		SupportFunctionTrait(BatchCreate);
-#undef SupportFunctionTrait
 
 		void BatchCreate(index_t begin, index_t end, const value_type_t& arg)
 		{
+			MPL::for_tuple(_tracers, [begin, end](auto& tracer)
+			{
+				tracer.BatchCreate(begin, end);
+			});
 			if (_entity.size() <= end)
 				_entity.grow_to(end);
 			_entity.set_range(begin, end, true);
@@ -65,21 +76,18 @@ namespace ESL
 
 		void BatchRemove(const HBV::bit_vector& remove) 
 		{ 
-			if constexpr(is_container_v<Vec> && std::is_pod_v<value_type_t>) {}
-			else if constexpr(is_container_v<SparseVec>)
+			auto vector = HBV::compose(HBV::and_op, remove, _entity);
+			MPL::for_tuple(_tracers, [&vector](auto& tracer)
 			{
-				if constexpr(!std::is_pod_v<value_type_t>)
-				{
-					HBV::for_each(HBV::compose(HBV::and_op, remove, _entity), [this](index_t i)
-					{
-						_container.SimpleRemove(i);
-					});
-				}
-				_container.BatchRemove(HBV::compose(HBV::and_op, remove, _entity));
+				tracer.BatchRemove(vector);
+			});
+			if constexpr(SupportBatchCreate<T>{})
+			{
+				_container.BatchRemove(vector);
 			}
 			else
 			{
-				HBV::for_each(HBV::compose(HBV::and_op, remove, _entity), [this](index_t i)
+				HBV::for_each(vector, [this](index_t i)
 				{
 					_container.Remove(i);
 				});
@@ -94,8 +102,8 @@ namespace ESL
 		template<typename T>
 		EntityState(MPL::type_t<T>) : _container(10u), _entity(10u) {}
 
-		EntityState(MPL::type_t<SparseVec<value_type_t>>) : _entity(10u), _container(_entity) {}
-
+		template<typename T>
+		EntityState(MPL::type_t<SparseVec<T>>) : _entity(10u), _container(_entity) {}
 
 		T& Raw()
 		{
@@ -107,13 +115,36 @@ namespace ESL
 			return _container;
 		}
 
-		const HBV::bit_vector &Available() const
+		template<Trace type>
+		const auto &Available() const
 		{
-			return _entity;
+			if constexpr(type == Trace::Has)
+				return _entity;
+			else
+				return ComposeTracer<type, types...>(_tracers);
+		}
+
+		template<Trace type>
+		void ResetTracer()
+		{
+			
+			std::get<Tracer<type>>(_tracers).Reset();
+		}
+
+		void ResetTracers()
+		{
+			MPL::for_tuple(_tracers, [](auto& tracer)
+			{
+				tracer.Reset();
+			});
 		}
 
 		auto &Get(index_t e)
 		{
+			MPL::for_tuple(_tracers, [&e](auto& tracer)
+			{
+				tracer.Change(e);
+			});
 			assert(Contain(e));
 			return _container.Get(e);
 		}
@@ -126,8 +157,12 @@ namespace ESL
 
 		auto &Create(index_t e, const value_type_t& arg)
 		{
+			MPL::for_tuple(_tracers, [&e](auto& tracer)
+			{
+				tracer.Create(e);
+			});
 			if (_entity.size() <= e)
-				_entity.grow_to(e + 1);
+				_entity.grow_to(e + 64*64);
 			if (Contain(e))
 				_container.Remove(e);
 			else
@@ -142,7 +177,11 @@ namespace ESL
 
 		void Remove(index_t e)
 		{
-			if (!Contain(e)) return;
+			assert(Contain(e));
+			MPL::for_tuple(_tracers, [](auto& tracer)
+			{
+				tracer.Remove(e);
+			});
 			_entity.set(e, false);
 			_container.Remove(e);
 		}
@@ -169,6 +208,38 @@ namespace ESL
 					reserve(sz + capacity());
 				parent::_Mylast() = parent::_Myfirst() + sz;
 			}
+		}
+	};
+
+	template<typename T>
+	class Placeholder
+	{ 
+	public:
+		T &Get(index_t e)
+		{
+			return *(T*)nullptr;
+		}
+
+		const T &Get(index_t e) const
+		{
+			return *(T*)nullptr;
+		}
+
+		void BatchCreate(index_t begin, index_t end, const T& arg)
+		{
+		}
+
+		T &Create(index_t e, const T& arg)
+		{
+			return *(T*)nullptr;
+		}
+
+		void BatchRemove(const bit_vector_and2& remove)
+		{
+		}
+
+		void Remove(index_t e)
+		{
 		}
 	};
 
@@ -208,6 +279,17 @@ namespace ESL
 			}
 			
 			return *(new(&_states[e]) T{ arg });
+		}
+
+		void BatchRemove(const bit_vector_and2& remove)
+		{
+			if constexpr(!std::is_pod_v<T>)
+			{
+				HBV::for_each(remove, [this](index_t i)
+				{
+					_states[i].~T();
+				});
+			}
 		}
 
 		void Remove(index_t e)
@@ -322,19 +404,19 @@ namespace ESL
 				free(_states[bucket]);
 		}
 
-		void SimpleRemove(index_t e)
+		
+		void BatchRemove(const bit_vector_and2& remove)
 		{
-			index_t bucket = e / BucketSize;
 			if constexpr(!std::is_pod_v<T>)
 			{
-				index_t index = e % BucketSize;
-				_states[bucket][index].~T();
+				HBV::for_each(remove, [this](index_t i)
+				{
+					index_t bucket = e / BucketSize;
+					index_t index = e % BucketSize;
+					_states[bucket][index].~T();
+				});
 			}
-		}
 
-		using type = decltype(HBV::compose(HBV::and_op, _entity, _entity));
-		void BatchRemove(const type& remove)
-		{
 			HBV::for_each<Level - 1>(remove, [this](index_t i)
 			{
 				if (_entity.layer(Level, i) && _states[i])

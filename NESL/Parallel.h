@@ -40,16 +40,21 @@ namespace ESL
 		using Trait = MPL::generic_function_trait<std::decay_t<F>>;
 		using Argument = typename Trait::argument_type;
 		using DecayArgument = MPL::map_t<std::decay_t, Argument>;
-		using States = MPL::fliter_t<IsState, DecayArgument>;
-		using EntityStates = MPL::map_t<State, MPL::fliter_t<IsRawEntityState, States>>;
+		using States = MPL::filter_t<IsState, DecayArgument>;
+		using RawEntityStates = MPL::filter_t<IsRawEntityState, States>;
 
-		if constexpr(MPL::size<EntityStates>{} == 0 && !MPL::contain_v<Entity, DecayArgument>) //不进行分派
+		using ExplictFilters = MPL::filter_t<is_filter, DecayArgument>;
+		using ImplictFilters = MPL::map_t<Has, RawEntityStates>;
+		using Filters = MPL::concat_t<ExplictFilters, ImplictFilters>;
+		using Checkers = typename MPL::map_t<Dispatcher::CheckFilters<Filters>::Checker, Filters>;
+
+		if constexpr(MPL::size<Filters>{} == 0 && !MPL::contain_v<Entity, DecayArgument>) //不进行分派
 		{
 			MPL::rewrap_t<Dispatcher::DispatchHelper, DecayArgument>::Dispatch(states, logic);
 		}
 		else
 		{
-			const auto available = MPL::rewrap_t<Dispatcher::ComposeHelper, EntityStates>::ComposeBitVector(states);
+			const auto available = MPL::rewrap_t<Dispatcher::ComposeHelper, Filters>::ComposeBitVector(states);
 			HBV::for_each_paralell(available, [&states, &logic](index_t i) //分派
 			{
 				MPL::rewrap_t<Dispatcher::EntityDispatchHelper, DecayArgument>::Dispatch(states, i, logic);

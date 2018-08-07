@@ -45,9 +45,11 @@ public:
 };
 
 struct location { float x, y; };
+//定义location为组件,以Vec为容器
 ENTITY_STATE(location, Vec);
 struct velocity { float x, y; };
-ENTITY_STATE(velocity, SparseVec);
+//定义velocity为组件,以SparseVec为容器,并且附加一个[创建]事件的追踪器
+ENTITY_STATE(velocity, SparseVec, ESL::Create);
 
 constexpr std::size_t Count = 10'000'000u;
 
@@ -57,30 +59,35 @@ void BenchMark_NESL()
 	ESL::LogicGraphBuilder graph(states);
 	{
 		TimerBlock timer("spawn 10m entity");
+		//注册组件
 		states.CreateState<location>();
 		states.CreateState<velocity>();
+		//批量创建Entity
 		states.BatchSpawnEntity(Count, location{ 0,0 }, velocity{ 1,1 });
 	}
-	float counter = 0;
-	graph.Schedule([&counter](const velocity& vel, location& loc)
+	double counter = 0;
+	//安排一个函数, 框架会自动根据函数参数[匹配]并执行
+	//匹配所有 [有velocity和location组件并且刚创建velocity] 的Entity
+	//以一次匹配为粒度执行, 用ScheduleParallel进一步切分粒度
+	graph.Schedule([&counter](const velocity& vel, location& loc, FCreated(velocity))
 	{
 		loc.x += vel.x;
 		loc.y += vel.y;
 		counter += vel.y;
 	}, "Mover");
-	/*graph.Schedule([](ESL::Entity self, const ESL::Entities& entities)
-	{
-		entities.Kill(self);
-	}, "Killer");*/
+	//根据安排的函数构建流程图
 	graph.Compile();
 	ESL::LogicGraph logicGraph;
 	graph.Build(logicGraph);
 	{
 		TimerBlock timer("move and kill 10m entity");
+		//执行流程图
 		logicGraph.Flow();
-		/*states.Tick();*/
+		//重置所有追踪器
+		states.ResetTracers();
+		logicGraph.Flow();
 	}
-	std::cout << counter << "\n";
+	std::cout << counter << "\n";//10000000
 }
 
 

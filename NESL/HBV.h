@@ -533,15 +533,19 @@ namespace HBV
 	};
 
 	template<typename F, typename... Ts>
-	auto compose(F&& f, const Ts&... args)
+	const auto &compose(F&& f, const Ts&... args)
 	{
-		return bit_vector_composer<F, Ts...>(std::forward<F>(f), args...);
+		using type = bit_vector_composer<F, Ts...>;
+		static char cache[sizeof(type)];
+		return *(type*)(new (&cache) type{ std::forward<F>(f), args... });
 	}
 
 	template<typename T>
-	auto compose(not_op_t f, const T& arg)
+	const auto &compose(not_op_t f, const T& arg)
 	{
-		return bit_vector_not_composer<T>(arg);
+		using type = bit_vector_not_composer<T>;
+		static char cache[sizeof(type)];
+		return *(type*)(new (&cache) type{ arg });
 	}
 
 	
@@ -558,7 +562,7 @@ namespace HBV
 		flag_t nodes{};
 		nodes = vec.layer0();
 		if (nodes == EmptyNode) return 0;
-		flag_t prefix{};
+		index_t prefix{};
 
 		for (int32_t level = 0;; ++level)
 		{
@@ -577,7 +581,7 @@ namespace HBV
 		flag_t nodes{};
 		nodes = vec.layer0();
 		if (nodes == EmptyNode) return 0;
-		flag_t prefix{};
+		index_t prefix{};
 
 		for (int32_t level = 0;; ++level)
 		{

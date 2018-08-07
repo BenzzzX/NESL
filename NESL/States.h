@@ -20,12 +20,11 @@ namespace ESL
 	template<>
 	struct TState<Entities> { using type = GlobalState<Entities>; };
 
-
-#define ENTITY_STATE(name, container) \
+#define ENTITY_STATE(name, container, ...) \
 namespace ESL \
 { \
 	template<> \
-	struct TState<name> { using type = EntityState<container<name>>; }; \
+	struct TState<name> { using type = EntityState<container<name>, __VA_ARGS__>; }; \
 }
 
 #define GLOBAL_STATE(name) \
@@ -45,8 +44,8 @@ namespace ESL \
 	struct TGlobalState;
 	
 
-	template<template<typename> class V, typename T>
-	struct TStateTrait<EntityState<V<T>>>
+	template<template<typename> class V, typename T, Trace... types>
+	struct TStateTrait<EntityState<V<T>, types...>>
 	{
 		using Raw = T;
 		using Type = TEntityState;
@@ -75,8 +74,8 @@ namespace ESL \
 		using Raw = Entities;
 	};
 
-	template<template<typename> class V, typename T>
-	struct TStateNonstric<EntityState<V<T>>>
+	template<template<typename> class V, typename T, Trace... types>
+	struct TStateNonstric<EntityState<V<T>, types...>> 
 	{
 		using State = EntityState<V<T>>;
 		using Raw = T;
@@ -101,6 +100,12 @@ namespace ESL \
 		using type = std::conditional_t<MPL::is_const_v<T>, MPL::add_const_t<StateNonstrict<T>>, StateNonstrict<T>>;
 	};
 
+	template<typename T, Trace t>
+	struct TStateStrict<Filter<T, t>>
+	{
+		using type = const State<T>;
+	};
+
 	template<>
 	struct TStateStrict<Entity>
 	{
@@ -117,6 +122,7 @@ namespace ESL \
 	{
 		std::unordered_map<std::size_t, std::any> _states;
 		std::vector<std::function<void(const HBV::bit_vector&)>> _onDoKill;
+		std::vector<std::function<void()>> _onResetTracers;
 		GlobalState<ESL::Entities>& _entities;
 		
 	public:
@@ -128,6 +134,12 @@ namespace ESL \
 			for (auto &f : _onDoKill)
 				f(entities._killed);
 			entities.DoKill();
+		}
+
+		void ResetTracers()
+		{
+			for (auto &f : _onResetTracers)
+				f();
 		}
 
 		auto& Entities()
@@ -153,11 +165,15 @@ namespace ESL \
 	private:
 
 		template<typename T>
-		void RegisterEntityDie(T& state)
+		void RegisterCallback(T& state)
 		{
 			_onDoKill.emplace_back([&state](const HBV::bit_vector& remove)
 			{
 				state.BatchRemove(remove);
+			});
+			_onResetTracers.emplace_back([&state]()
+			{
+				state.ResetTracers();
 			});
 		}
 	public:
@@ -166,7 +182,7 @@ namespace ESL \
 		{
 			using ST = State<T>;
 			auto &state = std::any_cast<ST&>(_states.insert({ typeid(ST).hash_code(), std::make_any<ST>()}).first->second);
-			RegisterEntityDie(state);
+			RegisterCallback(state);
 			return state;
 		}
 

@@ -54,6 +54,9 @@
     <ClInclude Include="Flatten.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="Trace.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="BenchMark.cpp">
