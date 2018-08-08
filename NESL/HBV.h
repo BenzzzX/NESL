@@ -483,15 +483,24 @@ namespace HBV
 	template<typename T>
 	class bit_vector_not_composer
 	{
-		const T& _node;
+		template<typename T>
+		struct storage { using type = T; };
+
+		template<>
+		struct storage<bit_vector> { using type = const bit_vector&; };
+
+		template<typename T>
+		using storage_t = typename storage<T>::type;
+
+		storage_t<T> _node;
 		/*
 		index_t _layer0;
 		lni::vector<index_t> _layer1;
 		lni::vector<index_t> _layer2;
 		*/
 	public:
-
-		bit_vector_not_composer(const T& arg) : _node(arg) 
+		template<typename T>
+		bit_vector_not_composer(T&& arg) : _node(std::forward<T>(arg)) 
 		{
 			/*index_t to = _node.size() / BitsPerLayer;
 			index_t value = (1 << BitsPerLayer - 1);
@@ -547,6 +556,12 @@ namespace HBV
 	__forceinline bit_vector_composer<F, std::decay_t<Ts>...> compose(F, Ts&&... args)
 	{
 		return { std::forward<Ts>(args)... };
+	}
+
+	template<typename T>
+	__forceinline bit_vector_not_composer<std::decay_t<T>> compose(not_op_t, T&& arg)
+	{
+		return { std::forward<T>(arg) };
 	}
 
 	

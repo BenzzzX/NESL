@@ -156,9 +156,8 @@ namespace ESL
 				template<Trace type>
 				struct SameTarget<Filter_t<typename T::target, type>> : std::true_type {};
 
-				static_assert(!((T::type & Has) && (T::type & Remove)), "Has filter conflict with Remove filter");
-				static_assert(!((T::type & Has) && (T::type & HasNot)), "Has filter conflict with HasNot filter");
-				static_assert(!((T::type & HasNot) && (T::type & Create)), "HasNot filter conflict with Create filter");
+				static_assert(!((T::type & Has) && (T::type != Has)), "Has filter is standalone");
+				static_assert(!((T::type & HasNot) && (T::type != HasNot)), "HasNot filter is standalone");
 				static_assert(MPL::size<MPL::filter_t<SameTarget, L>>{} == 1, "Multiple filter with same target is not allowd");
 			};
 			using type = MPL::rewrap_t<std::tuple, MPL::map_t<Checker, L>>;

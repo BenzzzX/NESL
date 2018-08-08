@@ -116,24 +116,22 @@ namespace ESL
 	}
 
 	template<Trace type, Trace... types, typename Tuple>
-	__forceinline decltype(auto) ComposeTracer(const Tuple& tuple)
+	__forceinline decltype(auto) ComposeTracer(const Tuple& tuple, const HBV::bit_vector& has)
 	{
 		static_assert(sizeof...(types) > 0, "no tracer!");
 		constexpr auto covered = (types | ... | 0);
 		static_assert(type & covered, "no available tracer!");
 		constexpr size_t bits = ((1 << types) | ...);
-		if constexpr(type & Trace::HasNot)
+		if constexpr(type == Trace::Has)
 		{
-			constexpr auto rest = type & 0b111;
-			if constexpr(rest == Trace::RB)
-			{
-				if constexpr(FitTracer<bits, 8, 6>()) return ComposeTracerFlags<8, 6>(tuple);
-				else return ComposeTracerFlags<8, 2, 3>(tuple);
-			}
-			else if constexpr(rest == Trace::Borrow)
-				return ComposeTracerFlags<8, 3>(tuple);
-			else if constexpr(rest == Trace::Remove)
-				return ComposeTracerFlags<8, 2>(tuple);
+			return has;
+		}
+		else if constexpr(type == Trace::HasNot)
+		{
+			if constexpr(bits & (1 << HasNot))
+				return (const HBV::bit_vector&)std::get<Tracer<HasNot>>(tuple).flag;
+			else
+				return HBV::compose(HBV::not_op, has);
 		}
 		else
 		{

@@ -3,7 +3,6 @@
 #include <thread>
 #include "Declare.h"
 #include <io.h>
-#include "../NESL/Trace.h"
 
 template<int32_t min, int32_t max>
 int32_t map(int32_t val)
@@ -118,7 +117,6 @@ int main()
 	graph.ExportGraphviz("test.gv");
 	ESL::LogicGraph logicGraph;
 	graph.Build(logicGraph);
-
 #pragma endregion
 
 #pragma region GameLoop

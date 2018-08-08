@@ -56,7 +56,6 @@ constexpr std::size_t Count = 10'000'000u;
 void BenchMark_NESL()
 {
 	ESL::States states;
-	ESL::LogicGraphBuilder graph(states);
 	{
 		TimerBlock timer("spawn 10m entity");
 		//注册组件
@@ -65,29 +64,18 @@ void BenchMark_NESL()
 		//批量创建Entity
 		states.BatchSpawnEntity(Count, location{ 0,0 }, velocity{ 1,1 });
 	}
-	double counter = 0;
-	//安排一个函数, 框架会自动根据函数参数[匹配]并执行
-	//匹配所有 [有velocity和location组件并且刚创建velocity] 的Entity
-	//以一次匹配为粒度执行, 用ScheduleParallel进一步切分粒度
-	graph.Schedule([&counter](const velocity& vel, location& loc, FCreated(velocity))
-	{
-		loc.x += vel.x;
-		loc.y += vel.y;
-		counter += vel.y;
-	}, "Mover");
-	//根据安排的函数构建流程图
-	graph.Compile();
-	ESL::LogicGraph logicGraph;
-	graph.Build(logicGraph);
 	{
 		TimerBlock timer("move and kill 10m entity");
-		//执行流程图
-		logicGraph.Flow();
-		//重置所有追踪器
+		ESL::Dispatch(states, 
+		//   [有velocity组件]   [有location组件]  [刚创建velocity] 的Entity将被匹配
+		[](const velocity& vel, location& loc, FCreated(velocity))
+		{
+			loc.x += vel.x;
+			loc.y += vel.y;
+		});
+		//重置所有追踪器, 如[刚创建velocity]将被重置
 		states.ResetTracers();
-		logicGraph.Flow();
 	}
-	std::cout << counter << "\n";//10000000
 }
 
 

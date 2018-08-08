@@ -118,10 +118,7 @@ namespace ESL
 		template<Trace type>
 		decltype(auto) Available() const
 		{
-			if constexpr(type == Trace::Has)
-				return (const HBV::bit_vector&)_entity;
-			else
-				return ComposeTracer<type, types...>(_tracers);
+			return ComposeTracer<type, types...>(_tracers, _entity);
 		}
 
 		template<Trace type>
