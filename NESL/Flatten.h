@@ -63,8 +63,8 @@ namespace ESL
 
 		using ExplictFilters = MPL::filter_t<is_filter, DecayArgument>;
 		using ImplictFilters = MPL::map_t<Has, RawEntityStates>;
-		using Filters = MPL::concat_t<ExplictFilters, ImplictFilters>;
-		using Checkers = typename MPL::map_t<Dispatcher::CheckFilters<Filters>::Checker, Filters>;
+		typename Dispatcher::CheckFilters<ExplictFilters>::type checker; (void)checker;
+		using Filters = typename Dispatcher::FixFilters<ExplictFilters, ImplictFilters>::type;
 		
 		using PerEntityData = MPL::concat_t<MPL::typelist<Entity>, RawEntityState>;
 		static_assert(MPL::size<Filters>{} != 0 || MPL::contain_v<Entity, DecayArgument>, "wrong parameter");

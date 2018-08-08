@@ -101,7 +101,7 @@ namespace ESL \
 	};
 
 	template<typename T, Trace t>
-	struct TStateStrict<Filter<T, t>>
+	struct TStateStrict<Filter_t<T, t>>
 	{
 		using type = const State<T>;
 	};

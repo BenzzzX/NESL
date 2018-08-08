@@ -20,13 +20,13 @@ namespace ESL
 		struct ComposeHelper<U, Ts...>
 		{
 			template<typename S, typename F, Trace type>
-			__forceinline static const auto& Take(S &states, Filter<F, type>)
+			__forceinline static decltype(auto) Take(S &states, Filter_t<F, type>)
 			{
 				return MPL::nonstrict_get<const State<F>&>(states).template Available<type>();
 			}
 
 			template<typename S>
-			__forceinline static auto ComposeBitVector(S &states)
+			__forceinline static decltype(auto) ComposeBitVector(S &states)
 			{
 				return HBV::compose(HBV::and_op, Take(states, U{}), Take(states, Ts{})...);
 			}
@@ -36,7 +36,7 @@ namespace ESL
 		struct ComposeHelper<>
 		{
 			template<typename S>
-			__forceinline static auto ComposeBitVector(S &states)
+			__forceinline static decltype(auto) ComposeBitVector(S &states)
 			{
 				return MPL::nonstrict_get<const GlobalState<Entities>&>(states).Raw().Available();
 			}
@@ -90,7 +90,7 @@ namespace ESL
 		struct DispatchHelper
 		{
 			template<typename T, typename S>
-			__forceinline static auto& Take(S &states)
+			__forceinline static decltype(auto) Take(S &states)
 			{
 				auto& state = MPL::nonstrict_get<const State<T>&>(states);
 				if constexpr(IsRawState<T>{})
@@ -141,7 +141,7 @@ namespace ESL
 			{
 				return (Trace)((Ts::type) | ...);
 			}
-			using type = Filter<typename T::target, GetType<T, Ts...>() > ;
+			using type = Filter_t<typename T::target, GetType<T, Ts...>() > ;
 		};
 		
 		template<typename L>
@@ -154,13 +154,32 @@ namespace ESL
 				struct SameTarget : std::false_type {};
 
 				template<Trace type>
-				struct SameTarget<Filter<typename T::target, type>> : std::true_type {};
+				struct SameTarget<Filter_t<typename T::target, type>> : std::true_type {};
 
 				static_assert(!((T::type & Has) && (T::type & Remove)), "Has filter conflict with Remove filter");
 				static_assert(!((T::type & Has) && (T::type & HasNot)), "Has filter conflict with HasNot filter");
 				static_assert(!((T::type & HasNot) && (T::type & Create)), "HasNot filter conflict with Create filter");
 				static_assert(MPL::size<MPL::filter_t<SameTarget, L>>{} == 1, "Multiple filter with same target is not allowd");
 			};
+			using type = MPL::rewrap_t<std::tuple, MPL::map_t<Checker, L>>;
+		};
+
+		template<typename L, typename S>
+		struct FixFilters
+		{
+			template<typename T>
+			struct ShouldAdd
+			{
+				template<typename T>
+				struct SameTarget : std::false_type {};
+
+				template<Trace type>
+				struct SameTarget<Filter_t<typename T::target, type>> : std::true_type {};
+
+				static constexpr auto value = MPL::size<MPL::filter_t<SameTarget, L>>{} == 0;
+			};
+			using ToAdd = MPL::filter_t<ShouldAdd, S>;
+			using type = MPL::concat_t<L, ToAdd>;
 		};
 	};
 
@@ -177,7 +196,7 @@ namespace ESL
 		return MPL::rewrap_t<Dispatcher::FetchHelper, FetchStates>::Fetch(states); //拿取资源
 	}
 	template<typename T>
-	using DefaultFilter = Filter<T, ESL::Trace::Has>;
+	using DefaultFilter = Filter_t<T, ESL::Trace::Has>;
 
 	template<typename F, typename S>
 	void Dispatch(S states, F&& logic)
@@ -190,9 +209,9 @@ namespace ESL
 
 		using ExplictFilters = MPL::filter_t<is_filter, DecayArgument>;
 		using ImplictFilters = MPL::map_t<DefaultFilter, RawEntityStates>;
-		using Filters = MPL::concat_t<ExplictFilters, ImplictFilters>;
-		using Checkers = typename MPL::map_t<Dispatcher::CheckFilters<Filters>::Checker, Filters>;
-
+		typename Dispatcher::CheckFilters<ExplictFilters>::type checker; (void)checker;
+		using Filters = typename Dispatcher::FixFilters<ExplictFilters, ImplictFilters>::type;
+		
 		if constexpr(MPL::size<Filters>{} == 0 && !MPL::contain_v<Entity, DecayArgument>) //不进行分派
 		{
 			MPL::rewrap_t<Dispatcher::DispatchHelper, DecayArgument>::Dispatch(states, logic);
@@ -200,11 +219,12 @@ namespace ESL
 		}
 		else
 		{
-			const auto available = MPL::rewrap_t<Dispatcher::ComposeHelper, Filters>::ComposeBitVector(states);
+			const auto available{ MPL::rewrap_t<Dispatcher::ComposeHelper, Filters>::ComposeBitVector(states) };
 			HBV::for_each(available, [&states, &logic](index_t i) //分派
 			{
 				MPL::rewrap_t<Dispatcher::EntityDispatchHelper, DecayArgument>::Dispatch(states, i, logic);
 			});
+			return (void)available;
 		}
 	}
 

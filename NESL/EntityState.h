@@ -95,15 +95,15 @@ namespace ESL
 			_entity.merge<true>(remove);
 		}
 		
-	public:
-
-		EntityState() : EntityState(MPL::type_t<T>{}) {}
-
 		template<typename T>
 		EntityState(MPL::type_t<T>) : _container(10u), _entity(10u) {}
 
 		template<typename T>
 		EntityState(MPL::type_t<SparseVec<T>>) : _entity(10u), _container(_entity) {}
+
+	public:
+
+		EntityState() : EntityState(MPL::type_t<T>{}) {}
 
 		T& Raw()
 		{
@@ -116,10 +116,10 @@ namespace ESL
 		}
 
 		template<Trace type>
-		const auto &Available() const
+		decltype(auto) Available() const
 		{
 			if constexpr(type == Trace::Has)
-				return _entity;
+				return (const HBV::bit_vector&)_entity;
 			else
 				return ComposeTracer<type, types...>(_tracers);
 		}

@@ -366,10 +366,21 @@ namespace HBV
 	template<typename F,typename... Ts>
 	class bit_vector_composer
 	{
-		const std::tuple<const Ts&...> _nodes;
-		F op;
+		template<typename T>
+		struct storage { using type = T; };
+
+		template<>
+		struct storage<bit_vector> { using type = const bit_vector&; };
+
+		template<typename T>
+		using storage_t = typename storage<T>::type;
+
+		const std::tuple<storage_t<Ts>...> _nodes;
+		F op = {};
 	public:
-		bit_vector_composer(F&& f, const Ts&... args) : op(std::forward<F>(f)), _nodes(args...) {}
+
+		template<typename... Ts>
+		bit_vector_composer(Ts&&... args) : _nodes(std::forward<Ts>(args)...) {}
 		template<index_t... i>
 		flag_t compose_layer0(std::index_sequence<i...>) const noexcept
 		{
@@ -447,7 +458,7 @@ namespace HBV
 	struct and_op_t
 	{
 		template<typename... Ts>
-		flag_t operator()(Ts... args)
+		flag_t operator()(Ts... args) const
 		{
 			return (args & ...);
 		}
@@ -456,7 +467,7 @@ namespace HBV
 	struct or_op_t
 	{
 		template<typename... Ts>
-		flag_t operator()(Ts... args)
+		flag_t operator()(Ts... args) const
 		{
 			return (args | ...);
 		}
@@ -464,7 +475,7 @@ namespace HBV
 
 	auto and_op = and_op_t{};
 
-	auto or_op = and_op_t{};
+	auto or_op = or_op_t{};
 
 	struct not_op_t {} not_op;
 
@@ -533,20 +544,9 @@ namespace HBV
 	};
 
 	template<typename F, typename... Ts>
-	const auto &compose(F&& f, const Ts&... args)
+	__forceinline bit_vector_composer<F, std::decay_t<Ts>...> compose(F, Ts&&... args)
 	{
-		//Hack!!
-		using type = bit_vector_composer<F, Ts...>;
-		static char cache[sizeof(type)];
-		return *(type*)(new (&cache) type{ std::forward<F>(f), args... });
-	}
-
-	template<typename T>
-	const auto &compose(not_op_t f, const T& arg)
-	{
-		using type = bit_vector_not_composer<T>;
-		static char cache[sizeof(type)];
-		return *(type*)(new (&cache) type{ arg });
+		return { std::forward<Ts>(args)... };
 	}
 
 	
@@ -604,6 +604,7 @@ namespace HBV
 		nodes[0] = vec.layer0();
 		index_t level = 0;
 		if (nodes[0] == EmptyNode) return;
+		
 		for (;;)
 		{
 			index_t low = lowbit_pos(nodes[level]);

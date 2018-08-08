@@ -6,36 +6,38 @@ namespace ESL
 {
 	enum Trace : uint8_t
 	{
-		Has    = 0b000,
-		Create = 0b001,
-		Remove = 0b010,
-		Borrow = 0b100,
-		CR	   = 0b011,
-		CB     = 0b101,
-		RB     = 0b110,
-		CRB    = 0b111,
-		HasNot = 0b1000
+		Create = 0b00001,
+		Remove = 0b00010,
+		Borrow = 0b00100,
+		CR	   = 0b00011,
+		CB     = 0b00101,
+		RB     = 0b00110,
+		CRB    = 0b00111,
+		HasNot = 0b01000,
+		Has    = 0b10000
 	};
 
 	//example: Tag<ELocation, Create>
 	template<typename T, Trace type>
-	struct Filter 
+	struct Filter_t 
 	{
 		static constexpr Trace type = type;
 		using target = T;
 	};
 
-#define FHas(T) ESL::Filter<T, ESL::Trace::Has> = {}
-#define FCreated(T) ESL::Filter<T, ESL::Trace::Create> = {}
-#define FRemoved(T) ESL::Filter<T, ESL::Trace::Remove> = {}
-#define FBorrowed(T) ESL::Filter<T, Trace::Borrow> = {}
-#define FHasNot(T) ESL::Filter<T, ESL::Trace::HasNot> = {}
+#define FHas(T) ESL::Filter_t<T, ESL::Has> = {}
+#define FCreated(T) ESL::Filter_t<T, ESL::Create> = {}
+#define FRemoved(T) ESL::Filter_t<T, ESL::Remove> = {}
+#define FBorrowed(T) ESL::Filter_t<T, Borrow> = {}
+#define FHasNot(T) ESL::Filter_t<T, ESL::HasNot> = {}
+
+#define Filter(T, W) ESL::Filter_t<T, W> = {}
 
 	template<typename T>
 	struct is_filter : std::false_type {};
 
 	template<typename T, Trace type>
-	struct is_filter<Filter<T, type>> : std::true_type {};
+	struct is_filter<Filter_t<T, type>> : std::true_type {};
 
 	template<Trace type>
 	struct Tracer
@@ -108,13 +110,13 @@ namespace ESL
 	}
 
 	template<size_t... is, typename Tuple>
-	const auto& ComposeTracerFlags(const Tuple& tuple)
+	__forceinline decltype(auto) ComposeTracerFlags(const Tuple& tuple)
 	{
 		return HBV::compose(HBV::or_op, (std::get<Tracer<(Trace)is>>(tuple).flag)...);
 	}
 
 	template<Trace type, Trace... types, typename Tuple>
-	const auto &ComposeTracer(const Tuple& tuple)
+	__forceinline decltype(auto) ComposeTracer(const Tuple& tuple)
 	{
 		static_assert(sizeof...(types) > 0, "no tracer!");
 		constexpr auto covered = (types | ... | 0);
