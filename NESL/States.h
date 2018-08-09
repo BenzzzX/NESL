@@ -121,8 +121,7 @@ namespace ESL \
 	class States
 	{
 		std::unordered_map<std::size_t, std::any> _states;
-		std::vector<std::function<void(const HBV::bit_vector&)>> _onDoKill;
-		std::vector<std::function<void()>> _onResetTracers;
+		std::vector<EntityStateBase*> _entityStates;
 		GlobalState<ESL::Entities>& _entities;
 		
 	public:
@@ -131,15 +130,15 @@ namespace ESL \
 		void Tick()
 		{
 			auto& entities = _entities.Raw();
-			for (auto &f : _onDoKill)
-				f(entities._killed);
+			for (auto &e : _entityStates)
+				e->BatchRemove(entities._killed);
 			entities.DoKill();
 		}
 
 		void ResetTracers()
 		{
-			for (auto &f : _onResetTracers)
-				f();
+			for (auto &e : _entityStates)
+				e->ResetTracers();
 		}
 
 		auto& Entities()
@@ -162,27 +161,13 @@ namespace ESL \
 			}
 		}
 
-	private:
-
-		template<typename T>
-		void RegisterCallback(T& state)
-		{
-			_onDoKill.emplace_back([&state](const HBV::bit_vector& remove)
-			{
-				state.BatchRemove(remove);
-			});
-			_onResetTracers.emplace_back([&state]()
-			{
-				state.ResetTracers();
-			});
-		}
 	public:
 		template<typename T, std::enable_if_t<IsEntityState<State<T>>::value, int> = 0>
 		auto &CreateState() noexcept
 		{
 			using ST = State<T>;
 			auto &state = std::any_cast<ST&>(_states.insert({ typeid(ST).hash_code(), std::make_any<ST>()}).first->second);
-			RegisterCallback(state);
+			_entityStates.emplace_back(&state);
 			return state;
 		}
 
@@ -216,6 +201,16 @@ namespace ESL \
 		{
 			std::pair<index_t, index_t> es = _entities.Raw().BatchSpawn(n);
 			std::initializer_list<int> _{ (BatchSpawnComponent(es, args),0)... };
+			return es;
+		}
+
+		template<typename... Ts>
+		std::pair<index_t, index_t> BatchInstantiateEntity(index_t n, index_t prototype)
+		{
+			std::pair<index_t, index_t> es = _entities.Raw().BatchSpawn(n);
+			for (auto &e : _entityStates)
+				if (e.Contain(prototype))
+					e.BatchInstantiate(es.first, es.second, prototype);
 			return es;
 		}
 

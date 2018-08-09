@@ -20,7 +20,7 @@ namespace ESL
 	class Vec;
 
 	template<typename T>
-	class Flag;
+	class Placeholder;
 
 	template<typename T, typename = void>
 	struct SupportBatchCreate : std::false_type {};
@@ -36,8 +36,19 @@ namespace ESL
 
 	using bit_vector_and2 = decltype(HBV::compose(HBV::and_op, HBV::bit_vector{}, HBV::bit_vector{}));
 
+	struct EntityStateBase
+	{
+		virtual bool Contain(index_t e) const = 0;
+		virtual void ResetTracers() = 0;
+		virtual void Remove(index_t e) = 0;
+	protected:
+		friend class States;
+		virtual void BatchInstantiate(index_t begin, index_t end, index_t proto) = 0;
+		virtual void BatchRemove(const HBV::bit_vector& remove) = 0;
+	};
+
 	template<typename T, Trace... types>
-	class EntityState
+	class EntityState : public EntityStateBase
 	{
 		HBV::bit_vector _entity;
 		T _container;
@@ -72,6 +83,12 @@ namespace ESL
 				for (index_t i = begin; i < end; ++i)
 					_container.Create(i, arg);
 			}
+		}
+
+		void BatchInstantiate(index_t begin, index_t end, index_t proto)
+		{
+			const value_type_t& prototype = Get(proto);
+			BatchCreate(begin, end, prototype);
 		}
 
 		void BatchRemove(const HBV::bit_vector& remove) 
@@ -175,7 +192,7 @@ namespace ESL
 		void Remove(index_t e)
 		{
 			assert(Contain(e));
-			MPL::for_tuple(_tracers, [](auto& tracer)
+			MPL::for_tuple(_tracers, [e](auto& tracer)
 			{
 				tracer.Remove(e);
 			});

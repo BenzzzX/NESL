@@ -118,10 +118,9 @@ namespace ESL
 	template<Trace type, Trace... types, typename Tuple>
 	__forceinline decltype(auto) ComposeTracer(const Tuple& tuple, const HBV::bit_vector& has)
 	{
-		static_assert(sizeof...(types) > 0, "no tracer!");
-		constexpr auto covered = (types | ... | 0);
+		constexpr auto covered = (types | ... | 24);
+		constexpr size_t bits = ((1 << types) | ... | 0);
 		static_assert(type & covered, "no available tracer!");
-		constexpr size_t bits = ((1 << types) | ...);
 		if constexpr(type == Trace::Has)
 		{
 			return has;
