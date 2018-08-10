@@ -59,15 +59,15 @@ namespace ESL
 		using Argument = typename Trait::argument_type;
 		using DecayArgument = MPL::map_t<std::decay_t, Argument>;
 		using States = MPL::filter_t<IsState, DecayArgument>;
-		using RawEntityState = MPL::filter_t<IsRawEntityState, States>;
+		using RawEntityStates = MPL::filter_t<IsRawEntityState, States>;
 
 		using ExplictFilters = MPL::filter_t<is_filter, DecayArgument>;
-		using ImplictFilters = MPL::map_t<Has, RawEntityStates>;
+		using ImplictFilters = MPL::map_t<DefaultFilter, RawEntityStates>;
 		typename Dispatcher::CheckFilters<ExplictFilters>::type checker; (void)checker;
 		using Filters = typename Dispatcher::FixFilters<ExplictFilters, ImplictFilters>::type;
 		
-		using PerEntityData = MPL::concat_t<MPL::typelist<Entity>, RawEntityState>;
-		static_assert(MPL::size<Filters>{} != 0 || MPL::contain_v<Entity, DecayArgument>, "wrong parameter");
+		using PerEntityData = MPL::concat_t<MPL::typelist<Entity>, RawEntityStates>;
+		static_assert(MPL::size<Filters>{} != 0 || MPL::contain_v<Entity, DecayArgument>, "wrong parameter!");
 		
 		const auto available = MPL::rewrap_t<Dispatcher::ComposeHelper, Filters>::ComposeBitVector(states);
 		using DataArrays = MPL::map_t<std::add_pointer_t, PerEntityData>;
@@ -113,5 +113,11 @@ namespace ESL
 				}
 			free(point);
 		});
+	}
+
+	template<typename F>
+	auto DispatchFlatten(States &states, F&& logic)
+	{
+		DispatchFlatten(FetchFor(states, logic), logic);
 	}
 }

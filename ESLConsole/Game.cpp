@@ -29,7 +29,7 @@ auto Logic_Clear(const ELifeTime& life, EAppearance& ap)
 		ap.v = ' ';
 }
 
-auto Logic_LifeTime(ELifeTime& life, ESL::Entity self, const GEntities& entities)
+auto Logic_LifeTime(ELifeTime& life, ESL::Entity self, GEntities& entities)
 {
 	if (--life.n < 0) //清理残影
 		entities.Kill(self);
@@ -47,9 +47,9 @@ auto Logic_Spawn(
 	if (res.has_value()) //创建残影
 	{
 		auto e = res.value();
-		lifetimes.Create(e.id, { sp.life });
-		locations.Create(e.id, { loc.x, loc.y });
-		appearances.Create(e.id, { '*' });
+		lifetimes.Create(e, { sp.life });
+		locations.Create(e, { loc.x, loc.y });
+		appearances.Create(e, { '*' });
 	}
 }
 #pragma endregion
@@ -57,12 +57,11 @@ auto Logic_Spawn(
 void Register(ESL::States& st, ESL::LogicGraphBuilder& graph)
 {
 	auto e = st.SpawnEntity();
-	st.Entities().Grow(200);
-	st.CreateState<EVelocity>().Create(e.id, { 1,0 });
-	st.CreateState<ELocation>().Create(e.id, { 6,20 });
+	st.CreateState<EVelocity>().Create(e, { 1,0 });
+	st.CreateState<ELocation>().Create(e, { 6,20 });
 	st.CreateState<ELifeTime>();
-	st.CreateState<EAppearance>().Create(e.id, { '@' });
-	st.CreateState<ELength>().Create(e.id, { 10 });
+	st.CreateState<EAppearance>().Create(e, { '@' });
+	st.CreateState<ELength>().Create(e, { 10 });
 	st.CreateState<GCanvas>(GetStdHandle(STD_OUTPUT_HANDLE));
 
 	graph.Schedule(Logic_Draw, "Draw");

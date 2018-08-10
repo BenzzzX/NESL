@@ -92,13 +92,18 @@ namespace ESL
 			template<typename T, typename S>
 			__forceinline static decltype(auto) Take(S &states)
 			{
-				auto& state = MPL::nonstrict_get<const State<T>&>(states);
+				
 				if constexpr(IsRawState<T>{})
 				{
+					auto& state = MPL::nonstrict_get<const State<T>&>(states);
 					return state.Raw();
 				}
 				else
+				{
+					auto& state = MPL::nonstrict_get<const T&>(states);
 					return state;
+				}
+					
 			}
 
 			template<typename F, typename S>
@@ -187,9 +192,8 @@ namespace ESL
 	{
 		using Trait = MPL::generic_function_trait<std::decay_t<F>>;
 		using Argument = typename Trait::argument_type;
-		using TrueArgument = MPL::concat_t<MPL::typelist<const Entities>, Argument>; //添加上Entities得到真正的参数
-
-		using NeedStates = MPL::map_t<StateStrict, TrueArgument>; //获得需要的States
+		
+		using NeedStates = MPL::map_t<StateStrict, Argument>; //获得需要的States
 		using FetchStates = typename Dispatcher::KeepMutable<MPL::unique_t<NeedStates>>::type; //去重,读写保留写
 
 		return MPL::rewrap_t<Dispatcher::FetchHelper, FetchStates>::Fetch(states); //拿取资源
@@ -223,7 +227,6 @@ namespace ESL
 			{
 				MPL::rewrap_t<Dispatcher::EntityDispatchHelper, DecayArgument>::Dispatch(states, i, logic);
 			});
-			return (void)available;
 		}
 	}
 

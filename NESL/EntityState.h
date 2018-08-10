@@ -8,31 +8,34 @@
 namespace ESL
 {
 	template<typename T>
+	using SupportBatchCreate = decltype(&T::BatchCreate);
+
+	template<typename T>
+	using SupportBatchRemove = decltype(&T::BatchRemove);
+
+	template<typename T>
+	using SupportInstantiate = decltype(&T::Instantiate);
+
+	template<typename>
 	class SparseVec;
 
-	template<typename T>
+	template<typename>
 	class Hash;
 
-	template<typename T>
+	template<typename>
 	class DenseVec;
 
-	template<typename T>
+	template<typename>
+	class SharedVec;
+
+	template<typename>
+	class UniqueVec;
+
+	template<typename>
 	class Vec;
 
-	template<typename T>
+	template<typename>
 	class Placeholder;
-
-	template<typename T, typename = void>
-	struct SupportBatchCreate : std::false_type {};
-	template<typename T>
-	struct SupportBatchCreate<T, std::void_t<decltype(&T::BatchCreate)>>
-		: std::true_type {};
-
-	template<typename T, typename = void>
-	struct SupportBatchRemove : std::false_type {};
-	template<typename T>
-	struct SupportBatchRemove<T, std::void_t<decltype(&T::BatchRemove)>>
-		: std::true_type {};
 
 	using bit_vector_and2 = decltype(HBV::compose(HBV::and_op, HBV::bit_vector{}, HBV::bit_vector{}));
 
@@ -41,6 +44,7 @@ namespace ESL
 		virtual bool Contain(index_t e) const = 0;
 		virtual void ResetTracers() = 0;
 		virtual void Remove(index_t e) = 0;
+		virtual void Instantiate(index_t e, index_t proto) = 0;
 	protected:
 		friend class States;
 		virtual void BatchInstantiate(index_t begin, index_t end, index_t proto) = 0;
@@ -65,7 +69,7 @@ namespace ESL
 
 		friend class States;
 
-		void BatchCreate(index_t begin, index_t end, const value_type_t& arg)
+		void BatchCreate(index_t begin, index_t end, const value_type_t& arg) noexcept
 		{
 			MPL::for_tuple(_tracers, [begin, end](auto& tracer)
 			{
@@ -74,7 +78,7 @@ namespace ESL
 			if (_entity.size() <= end)
 				_entity.grow_to(end);
 			_entity.set_range(begin, end, true);
-			if constexpr(SupportBatchCreate<T>{})
+			if constexpr(MPL::is_detected<SupportBatchCreate, T>{})
 			{
 				_container.BatchCreate(begin, end, arg);
 			}
@@ -85,20 +89,21 @@ namespace ESL
 			}
 		}
 
-		void BatchInstantiate(index_t begin, index_t end, index_t proto)
+		void BatchInstantiate(index_t begin, index_t end, index_t proto) noexcept
 		{
 			const value_type_t& prototype = Get(proto);
 			BatchCreate(begin, end, prototype);
 		}
 
-		void BatchRemove(const HBV::bit_vector& remove) 
+		//注意remove并不一定存在于容器中,需要一次compose
+		void BatchRemove(const HBV::bit_vector& remove) noexcept
 		{ 
 			auto vector = HBV::compose(HBV::and_op, remove, _entity);
 			MPL::for_tuple(_tracers, [&vector](auto& tracer)
 			{
 				tracer.BatchRemove(vector);
 			});
-			if constexpr(SupportBatchCreate<T>{})
+			if constexpr(MPL::is_detected<SupportBatchRemove, T>{})
 			{
 				_container.BatchRemove(vector);
 			}
@@ -113,29 +118,74 @@ namespace ESL
 		}
 		
 		template<typename T>
-		EntityState(MPL::type_t<T>) : _container(10u), _entity(10u) {}
+		EntityState(MPL::type_t<T>) noexcept : _container(10u), _entity(10u) {}
 
+		//Hack!SparseVec复用了_entity
 		template<typename T>
-		EntityState(MPL::type_t<SparseVec<T>>) : _entity(10u), _container(_entity) {}
+		EntityState(MPL::type_t<SparseVec<T>>) noexcept : _entity(10u), _container(_entity) {}
 
+		//Hack!DenseVec复用了SparseVec
+		template<typename T>
+		EntityState(MPL::type_t<DenseVec<T>>) noexcept : _entity(10u), _container(_entity) {}
+
+		//Hack!SharedVec复用了SparseVec
+		template<typename T>
+		EntityState(MPL::type_t<SharedVec<T>>) noexcept : _entity(10u), _container(_entity) {}
+
+		//Hack!SharedVec复用了SparseVec
+		template<typename T>
+		EntityState(MPL::type_t<UniqueVec<T>>) noexcept : _entity(10u), _container(_entity) {}
 	public:
 
-		EntityState() : EntityState(MPL::type_t<T>{}) {}
+		EntityState() noexcept : EntityState(MPL::type_t<T>{}) {}
 
-		T& Raw()
+		template<typename = std::enable_if_t<std::is_same_v<T, UniqueVec<value_type_t>>>>
+		index_t UniqueSize() const
+		{
+			return _container.UniqueSize();
+		}
+
+		template<typename = std::enable_if_t<std::is_same_v<T, UniqueVec<value_type_t>>>>
+		const auto& SetUnique(int32_t i)
+		{
+			_container.FilterId = i;
+			//Hack!在filter状态下,返回和id无关,所以可以随便传一个数
+			return _container.Get(0);
+		}
+
+		T& Raw() noexcept
 		{
 			return _container;
 		}
 
-		const T& Raw() const
+		const T& Raw() const noexcept
 		{
 			return _container;
 		}
 
 		template<Trace type>
-		decltype(auto) Available() const
+		decltype(auto) Available() const noexcept
 		{
-			return ComposeTracer<type, types...>(_tracers, _entity);
+			if constexpr(std::is_same_v<T, UniqueVec<value_type_t>>)
+			{
+				static_assert(!(type & Borrow), "Borrow is not supported with UniqueVec!");
+				if (_container.FilterId >= 0)
+				{
+					if constexpr(type == Trace::Has)
+						return _container.Available();
+					else 
+						return HBV::compose(HBV::and_op, _container.Available(), ComposeTracer<type, types...>(_tracers, _entity));
+				}
+				else
+				{
+					return ComposeTracer<type, types...>(_tracers, _entity);
+				}
+			}
+			else
+			{
+				return ComposeTracer<type, types...>(_tracers, _entity);
+			}
+			
 		}
 
 		template<Trace type>
@@ -145,7 +195,7 @@ namespace ESL
 			std::get<Tracer<type>>(_tracers).Reset();
 		}
 
-		void ResetTracers()
+		void ResetTracers() noexcept
 		{
 			MPL::for_tuple(_tracers, [](auto& tracer)
 			{
@@ -153,7 +203,7 @@ namespace ESL
 			});
 		}
 
-		auto &Get(index_t e)
+		auto &Get(index_t e) noexcept
 		{
 			MPL::for_tuple(_tracers, [&e](auto& tracer)
 			{
@@ -163,13 +213,13 @@ namespace ESL
 			return _container.Get(e);
 		}
 
-		const auto &Get(index_t e) const
+		const auto &Get(index_t e) const noexcept
 		{
 			assert(Contain(e));
 			return _container.Get(e);
 		}
 
-		auto &Create(index_t e, const value_type_t& arg)
+		decltype(auto) Create(index_t e, const value_type_t& arg)  noexcept
 		{
 			MPL::for_tuple(_tracers, [&e](auto& tracer)
 			{
@@ -184,12 +234,28 @@ namespace ESL
 			return _container.Create(e, arg);
 		}
 
-		bool Contain(index_t e) const
+		void Instantiate(index_t e, index_t proto) noexcept
+		{
+			MPL::for_tuple(_tracers, [&e](auto& tracer)
+			{
+				tracer.Create(e);
+			});
+			//鬼畜的VS只有这样才能编译过
+			if constexpr(MPL::is_detected<SupportInstantiate, T>{})
+			{
+				_container.Instantiate(e, proto);
+				_entity.set(e, true);
+			}
+			else
+				_container.Create(e, _container.Get(proto));
+		}
+
+		bool Contain(index_t e) const noexcept
 		{
 			return _entity.contain(e);
 		}
 
-		void Remove(index_t e)
+		void Remove(index_t e) noexcept
 		{
 			assert(Contain(e));
 			MPL::for_tuple(_tracers, [e](auto& tracer)
@@ -347,7 +413,7 @@ namespace ESL
 	{
 		const HBV::bit_vector& _entity;
 		lni::vector<T*> _states;
-		static constexpr index_t Level = 2;
+		static constexpr index_t Level = 2u;
 		static constexpr index_t BucketSize = 1 << ((HBV::LayerCount - Level)*HBV::BitsPerLayer);
 
 	public:
@@ -375,7 +441,7 @@ namespace ESL
 			if (_states[bucket] == nullptr)
 				_states[bucket] = (T*)malloc(sizeof(T)*BucketSize);
 			index_t index = e % BucketSize;
-			new (_states[bucket] + index) T{ arg };
+			return *(new (_states[bucket] + index) T{ arg });
 		}
 
 		void BatchCreate(index_t begin, index_t end, const T& arg)
@@ -439,70 +505,34 @@ namespace ESL
 		}
 	};
 
-
 	template<typename T>
 	class DenseVec
 	{
 		uvector<T> _states;
 		HBV::bit_vector _empty;
-		lni::vector<int32_t> _redirector; 
-		
+		SparseVec<index_t> _redirector;
 		auto GetFree()
 		{
 			std::optional<index_t> id{};
-			if(!_empty.empty())
-				id = HBV::first(_empty);
+			if (!_empty.empty())
+				id = HBV::last(_empty);
 			return id;
 		}
 	public:
-		DenseVec(std::size_t sz = 10u) 
+		DenseVec(const HBV::bit_vector& entities)
+			: _redirector(entities), _empty(10u, true) 
 		{
-			_states.resize(sz);
-			_redirector.resize(sz, -1);
-			_empty.grow_to(sz, true);
+			_states.resize(10u);
 		}
 
-		T & Get(index_t e)
+		T &Get(index_t e)
 		{
-			return _states[_redirector[e]];
+			return _states[_redirector.Get(e)];
 		}
 
 		const T &Get(index_t e) const
 		{
-			return _states[_redirector[e]];
-		}
-
-		void BatchCreate(index_t begin, index_t end, const T& arg)
-		{
-			if (end > _redirector.size())
-				_redirector.resize(end, -1);
-			index_t n = end - begin;
-			index_t start;
-			index_t last = _empty.last();
-			HBV::flag_t fullValue = HBV::value_of<3>(last) -1 + HBV::value_of<3>(last);
-			int32_t i = HBV::index_of<3>(last);
-			HBV::flag_t value = _empty.layer3(i);
-			if (value != fullValue)
-			{
-				value = (~value)&fullValue;
-				start = (i << HBV::BitsPerLayer) + HBV::highbit_pos(value) + 1;
-			}
-			else
-			{
-				while (--i && (value = _empty.layer3(i)) == HBV::FullNode);
-				start = (i << HBV::BitsPerLayer) + HBV::highbit_pos(~value) + 1;
-			}
-			if (start + n > _states.size())
-			{
-				_states.resize(start + n);
-				_empty.grow_to(start + n);
-			}
-			_empty.set_range(start, start + n, false);
-			for (i = 0; i < n; ++i)
-			{
-				_redirector[begin + i] = start + i;
-				new(&_states[_redirector[begin + i]]) T{ arg };
-			}
+			return _states[_redirector.Get(e)];
 		}
 
 		T &Create(index_t e, const T& arg)
@@ -515,17 +545,200 @@ namespace ESL
 				free = GetFree();
 			}
 			_empty.set(free.value(), false);
-			if (e >= _redirector.size())
-				_redirector.resize(e + _redirector.size() / 2);
-			_redirector[e] = free.value();
-			return *(new(&_states[_redirector[e]]) T{ arg });
+			_redirector.Create(e, free.value());
+			return *(new(&_states[free.value()]) T{ arg });
 		}
 
 		void Remove(index_t e)
 		{
 			if constexpr(!std::is_pod_v<T>)
-				_states[_redirector[e]].~T();
-			_empty.set(_redirector[e], true);
+				_states[_redirector.Get(e)].~T();
+			_empty.set(_redirector.Get(e), true);
+			_redirector.Remove(e);
+		}
+	};
+
+	template<typename T>
+	class UniqueVec
+	{
+		struct Unique
+		{
+			T* state{nullptr};
+			index_t refCount;
+			HBV::bit_vector entities{10u};
+		};
+		lni::vector<Unique> _states;
+		SparseVec<index_t> _redirector;
+		
+	public:
+		UniqueVec(const HBV::bit_vector& entities)
+			: _redirector(entities), FilterId(-1) {}
+		const T &Get(index_t e) const
+		{
+			if(FilterId>0)
+				return *(_states[FilterId].state);
+			else
+				return *(_states[_redirector.Get(e)].state);
+		}
+
+		index_t UniqueSize() const
+		{
+			return _states.size();
+		}
+
+		int32_t FilterId;
+
+		const HBV::bit_vector &Available() const
+		{
+			return _states[FilterId].entities;
+		}
+
+		void BatchCreate(index_t begin, index_t end, const T& arg)
+		{
+			Create(begin, arg);
+			index_t prototype = _redirector.Get(begin);
+			_states[prototype].refCount += end - begin;
+			_redirector.BatchCreate(begin + 1, end, prototype);
+		}
+
+		void Instantiate(index_t e, index_t proto)
+		{
+			index_t prototype = _redirector.Get(proto);
+			_states[prototype].refCount++;
+			_redirector.Create(e, prototype);
+		}
+
+		//Hack!强行取得了arg的所有权
+		const T &Create(index_t e, const T& arg)
+		{
+			for (index_t i = 0; i < _states.size(); ++i)
+				if (&arg == _states[i].state)
+				{
+					_states[i].refCount++;
+					auto& entities = _states[i].entities;
+					if (entities.size() < e)
+						entities.grow_to(e * 3 / 2);
+					entities.set(e, true);
+					_redirector.Create(e, i);
+					return arg;
+				}
+			for (index_t i = 0; i < _states.size(); ++i)
+				if (nullptr == _states[i].state)
+				{
+					auto& unique = _states[i];
+					unique.refCount = 1;
+					unique.state = const_cast<T*>(&arg);
+					unique.entities.set(e, true);
+					return arg;
+				}
+			_states.emplace_back();
+			auto& unique = _states.back();
+			unique.refCount = 1;
+			unique.state = const_cast<T*>(&arg);
+			unique.entities.set(e, true);
+			return arg;
+		}
+
+		void Remove(index_t e)
+		{
+			auto& unique = _states[_redirector.Get(e)];
+			if (--unique.refCount == 0)
+			{
+				unique.entities.clear();
+				delete unique.state;
+				unique.state = nullptr;
+				_redirector.Remove(e);
+			}
+			else
+			{
+				unique.entities.set(e, false);
+				_redirector.Remove(e);
+			}
+		}
+	};
+
+	template<typename T>
+	class SharedVec
+	{
+		uvector<T> _states;
+		HBV::bit_vector _empty;
+		uvector<index_t> _refs;
+		SparseVec<index_t> _redirector;
+		auto GetFree()
+		{
+			std::optional<index_t> id{};
+			if(!_empty.empty())
+				id = HBV::first(_empty);
+			return id;
+		}
+
+		index_t CreateFree(index_t e)
+		{
+			auto free = GetFree();
+			while (!free.has_value() || free.value() >= _states.size())
+			{
+				_states.resize(_states.size() + 10u);
+				_refs.resize(_states.size() + 10u);
+				_empty.grow_to(_states.size(), true);
+				free = GetFree();
+			}
+			_empty.set(free.value(), false);
+			_refs[free.value()] = 1;
+			_redirector.Create(e, free.value());
+			return free.value();
+		}
+
+	public:
+		SharedVec(const HBV::bit_vector& entities)
+			: _redirector(entities), _empty(10u, true)
+		{
+			_states.resize(10u);
+			_refs.resize(10u);
+		}
+
+		T & Get(index_t e)
+		{
+			index_t id = _redirector.Get(e);
+			if (_refs[id] > 1)
+			{
+				_refs[id]--;
+				return *(new(&_states[CreateFree(e)]) T{ _states[id] });
+			}
+			return _states[id];
+		}
+
+		const T &Get(index_t e) const
+		{
+			return _states[_redirector.Get(e)];
+		}
+
+		void BatchCreate(index_t begin, index_t end, const T& arg)
+		{
+			Create(begin, arg);
+			index_t prototype = _redirector.Get(begin);
+			_refs[prototype] = end - begin;
+			_redirector.BatchCreate(begin + 1, end, prototype);
+		}
+
+		void Instantiate(index_t e, index_t proto)
+		{
+			index_t prototype = _redirector.Get(proto);
+			_refs[prototype]++;
+			_redirector.Create(e, prototype);
+		}
+
+		T &Create(index_t e, const T& arg)
+		{
+			return *(new(&_states[CreateFree(e)]) T{ arg });
+		}
+
+		void Remove(index_t e)
+		{
+			if constexpr(!std::is_pod_v<T>)
+				_states[_redirector.Get(e)].~T();
+			_refs[_redirector.Get(e)]--;
+			_empty.set(_redirector.Get(e), true);
+			_redirector.Remove(e);
 		}
 	};
 }

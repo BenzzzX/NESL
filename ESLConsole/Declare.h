@@ -33,7 +33,7 @@ auto Logic_Spawn(const ELength& sp, const ELocation& loc, GEntities& entities,
 	ESL::State<ELifeTime>& lifetimes, ESL::State<ELocation>& locations,
 	ESL::State<EAppearance>& appearances);
 
-auto Logic_LifeTime(ELifeTime& life, ESL::Entity self, const GEntities& entities);
+auto Logic_LifeTime(ELifeTime& life, ESL::Entity self, GEntities& entities);
 
 auto Logic_Move(ELocation& loc, EVelocity& vel);
 

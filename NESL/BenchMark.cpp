@@ -44,20 +44,60 @@ public:
 	}
 };
 
+
+struct velocity { float x, y; };
+//定义velocity为组件,以SparseVec为容器,并且附加一个[创建]事件的追踪器
+ENTITY_STATE(velocity, SharedVec, ESL::Create);
 struct location { float x, y; };
 //定义location为组件,以Vec为容器
 ENTITY_STATE(location, Vec);
-struct velocity { float x, y; };
-//定义velocity为组件,以SparseVec为容器,并且附加一个[创建]事件的追踪器
-ENTITY_STATE(velocity, SparseVec, ESL::Create);
+struct mesh {/*some data*/ };
+ENTITY_STATE(mesh, UniqueVec);
 
 constexpr std::size_t Count = 10'000'000u;
+void DrawInstanced(const mesh&, const lni::vector<location>&) {/*some code*/}
+
+void UniqueVecShowCase()
+{
+	ESL::States states;
+	ESL::LogicGraphBuilder graph(states);
+	//注册组件
+	states.CreateState<location>();
+	states.CreateState<mesh>();
+	//创建1kw个对象,分别使用两个模型
+	states.BatchSpawnEntity(Count / 2, location{ 0,0 }, *(new mesh{})); //Mesh1
+	states.BatchSpawnEntity(Count / 2, location{ 0,0 }, *(new mesh{})); //Mesh2
+	//使用graph来安全的多线程化
+	graph.Schedule([]
+	(const ESL::State<location>& locs, ESL::State<mesh>& meshs)
+	{
+		//取得mesh的数量
+		auto size = meshs.UniqueSize();
+		//用于数据的打包
+		lni::vector<location> buffer;
+		buffer.reserve(Count / 2);
+		for (auto i = 0; i < size; ++i)
+		{
+			//获得一个mesh,并设置为filter,为接下来的匹配做准备
+			const mesh& toDraw = meshs.SetUnique(i);
+			//打包所有使用这个mesh的对象的位置
+			ESL::Dispatch(std::tie(locs, meshs),[&buffer]
+			(const location& location, FHas(mesh))
+			{
+				buffer.push_back(location);
+			});
+			//进行绘制
+			DrawInstanced(toDraw, buffer);
+			buffer.clear();
+		}
+	}, "DrawInstancedMesh");
+}
 
 void BenchMark_NESL()
 {
 	ESL::States states;
 	{
-		TimerBlock timer("spawn 10m entity");
+		TimerBlock timer("create 10m entity");
 		//注册组件
 		states.CreateState<location>();
 		states.CreateState<velocity>();
@@ -65,7 +105,7 @@ void BenchMark_NESL()
 		states.BatchSpawnEntity(Count, location{ 0,0 }, velocity{ 1,1 });
 	}
 	{
-		TimerBlock timer("move and kill 10m entity");
+		TimerBlock timer("update 10m entity");
 		ESL::Dispatch(states, 
 		//   [有velocity组件]   [有location组件]  [刚创建velocity] 的Entity将被匹配
 		[](const velocity& vel, location& loc, FCreated(velocity))
@@ -86,23 +126,21 @@ void BenchMark_LogicGraph()
 	timer.begin("create 10m entity");
 	ESL::States states;
 	ESL::LogicGraphBuilder graph(states);
-	std::pair<ESL::index_t, ESL::index_t> range;
 	auto& locations = states.CreateState<location>();
 	auto& velocities = states.CreateState<velocity>();
-	range = states.BatchSpawnEntity(Count, location{ 0,0 }, velocity{ 1,1 });
+	states.BatchSpawnEntity(Count, location{ 0,0 }, velocity{ 1,1 });
 	timer.finish();
 
-	auto move = [](const velocity& vel, location& loc)
+	graph.ScheduleParallel([](const velocity& vel, location& loc)
 	{
 		loc.x += vel.x;
 		loc.y += vel.y;
-	};
-	graph.Schedule(move, "Move");
+	}, "Move");
 	ESL::LogicGraph logicGraph;
 	graph.Compile();
 	graph.Build(logicGraph);
 
-	timer.begin("move 10m entity");
+	timer.begin("update 10m entity");
 	logicGraph.Flow();
 	timer.finish();
 }

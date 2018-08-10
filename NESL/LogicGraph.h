@@ -172,7 +172,6 @@ namespace ESL
 
 				for (auto &read : node->_reads)
 				{
-					if (read == typeid(GlobalState<Entities>).hash_code()) continue;
 					std::size_t &id = states[read];
 					StateNode &sn = _stateNodes[id];
 					sn._readers.push_back(node);
@@ -232,7 +231,11 @@ namespace ESL
 				}
 
 				if constexpr(MPL::is_const_v<type>)
-					node._reads.push_back(id);
+				{
+					//Hack!Ìø¹ýEntitiesµÄ¶Á¼ì²â
+					if(!std::is_same_v<type, const GlobalState<Entities>&>)
+						node._reads.push_back(id);
+				}
 				else
 					node._writes.push_back(id);
 			});

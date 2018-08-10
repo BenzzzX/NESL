@@ -305,4 +305,13 @@ namespace MPL
 	{
 		return typeid(type_t<T>).name();
 	}
+
+	template <template <class...> class Trait, class Enabler, class... Args>
+	struct is_detected_helper : std::false_type {};
+
+	template <template <class...> class Trait, class... Args>
+	struct is_detected_helper<Trait, std::void_t<Trait<Args...>>, Args...> : std::true_type {};
+
+	template <template <class...> class Trait, class... Args>
+	using is_detected = typename is_detected_helper<Trait, void, Args...>::type;
 }

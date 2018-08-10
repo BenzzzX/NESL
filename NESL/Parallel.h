@@ -34,6 +34,7 @@ namespace HBV
 
 namespace ESL
 {
+	//you won't understand this
 	template<typename F, typename S>
 	void DispatchParallel(S states, F&& logic)
 	{
@@ -44,22 +45,23 @@ namespace ESL
 		using RawEntityStates = MPL::filter_t<IsRawEntityState, States>;
 
 		using ExplictFilters = MPL::filter_t<is_filter, DecayArgument>;
-		using ImplictFilters = MPL::map_t<Has, RawEntityStates>;
+		using ImplictFilters = MPL::map_t<DefaultFilter, RawEntityStates>;
 		typename Dispatcher::CheckFilters<ExplictFilters>::type checker; (void)checker;
 		using Filters = typename Dispatcher::FixFilters<ExplictFilters, ImplictFilters>::type;
 
-		if constexpr(MPL::size<Filters>{} == 0 && !MPL::contain_v<Entity, DecayArgument>) //不进行分派
+		static_assert(MPL::size<Filters>{} > 0 || MPL::contain_v<Entity, DecayArgument>, "Parallel means nothing with global states."); //不进行分派
+		
+		const auto available = MPL::rewrap_t<Dispatcher::ComposeHelper, Filters>::ComposeBitVector(states);
+		HBV::for_each_paralell(available, [&states, &logic](index_t i) //分派
 		{
-			MPL::rewrap_t<Dispatcher::DispatchHelper, DecayArgument>::Dispatch(states, logic);
-		}
-		else
-		{
-			const auto available = MPL::rewrap_t<Dispatcher::ComposeHelper, Filters>::ComposeBitVector(states);
-			HBV::for_each_paralell(available, [&states, &logic](index_t i) //分派
-			{
-				MPL::rewrap_t<Dispatcher::EntityDispatchHelper, DecayArgument>::Dispatch(states, i, logic);
-			});
-		}
+			MPL::rewrap_t<Dispatcher::EntityDispatchHelper, DecayArgument>::Dispatch(states, i, logic);
+		});
+	}
+
+	template<typename F>
+	auto DispatchParallel(States &states, F&& logic)
+	{
+		DispatchParallel(FetchFor(states, logic), logic);
 	}
 }
 

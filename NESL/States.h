@@ -127,12 +127,14 @@ namespace ESL \
 	public:
 		States() : _entities(CreateState<ESL::Entities>()) {}
 
-		void Tick()
+		void Tick(index_t growThreshold = 10u)
 		{
 			auto& entities = _entities.Raw();
 			for (auto &e : _entityStates)
 				e->BatchRemove(entities._killed);
 			entities.DoKill();
+			if (entities._freeCount <= growThreshold)
+				entities.Grow();
 		}
 
 		void ResetTracers()
@@ -193,6 +195,17 @@ namespace ESL \
 		Entity SpawnEntity()
 		{
 			auto e = _entities.Raw().ForceSpawn();
+			return e;
+		}
+
+		//注意:这里会遍历_entityStates,可能造成性能问题
+		template<typename... Ts>
+		Entity InstantiateEntity(index_t prototype)
+		{
+			Entity e = SpawnEntity();
+			for (auto &s : _entityStates)
+				if (s.Contain(prototype))
+					s.Instantiate(e, prototype);
 			return e;
 		}
 
