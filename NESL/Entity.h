@@ -61,7 +61,6 @@ namespace ESL
 				GrowTo(end + n);
 			_freeCount-=n;
 			_alive.set_range(end, end + n, true);
-			_killed.set_range(end, end + n, false);
 			for (index_t i = end; i < end + n; ++i)
 				++_generation[i];
 			return { end ,end + n };

@@ -220,7 +220,7 @@ namespace ESL
 			MPL::for_tuple(fetchedStates, [&node, this](auto &wrapper)
 			{
 				using type = decltype(wrapper);
-				using intern = typename TStateTrait<std::decay_t<type>>::Raw;
+				using intern = typename TStateNonstrict<std::decay_t<type>>::Raw;
 				std::size_t id = typeid(type).hash_code();
 
 				if (_stateInfos.find(id) == _stateInfos.end())

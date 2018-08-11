@@ -29,14 +29,14 @@ ENTITY_STATE(ELength, Vec);
 #pragma endregion
 
 
-auto Logic_Spawn(const ELength& sp, const ELocation& loc, GEntities& entities,
+void Logic_Spawn(const ELength& sp, const ELocation& loc, GEntities& entities,
 	ESL::State<ELifeTime>& lifetimes, ESL::State<ELocation>& locations,
 	ESL::State<EAppearance>& appearances);
 
-auto Logic_LifeTime(ELifeTime& life, ESL::Entity self, GEntities& entities);
+void Logic_LifeTime(ELifeTime& life, ESL::Entity self, GEntities& entities);
 
-auto Logic_Move(ELocation& loc, EVelocity& vel);
+void Logic_Move(ELocation& loc, EVelocity& vel);
 
-auto Logic_Draw(const ELocation& loc, const EAppearance& ap, GCanvas& canvas);
+void Logic_Draw(const ELocation& loc, const EAppearance& ap, GCanvas& canvas);
 
-auto Logic_Clear(const ELifeTime& life, EAppearance& ap);
+void Logic_Clear(const ELifeTime& life, EAppearance& ap);

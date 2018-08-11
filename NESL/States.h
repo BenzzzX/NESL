@@ -37,62 +37,47 @@ namespace ESL \
 	template<typename T>
 	struct IsState : MPL::is_complete<TState<T>> {};
 
-	template<typename T>
-	struct TStateTrait;
-
 	struct TEntityState;
 	struct TGlobalState;
 	
 
-	template<template<typename> class V, typename T, Trace... types>
-	struct TStateTrait<EntityState<V<T>, types...>>
-	{
-		using Raw = T;
-		using Type = TEntityState;
-	};
-
-	template<typename T>
-	struct TStateTrait<GlobalState<T>>
-	{
-		using Raw = T;
-		using Type = TGlobalState;
-	};
-
 
 
 	template<typename T>
-	struct TStateNonstric
+	struct TStateNonstrict
 	{
 		using State = State<T>;
 		using Raw = T;
 	};
 
 	template<>
-	struct TStateNonstric<Entity>
+	struct TStateNonstrict<Entity>
 	{
 		using State = GlobalState<Entities>;
 		using Raw = Entities;
 	};
 
 	template<template<typename> class V, typename T, Trace... types>
-	struct TStateNonstric<EntityState<V<T>, types...>> 
+	struct TStateNonstrict<EntityState<V<T>, types...>> 
 	{
 		using State = EntityState<V<T>>;
+		using Type = TEntityState;
 		using Raw = T;
 	};
 
 	template<typename T>
-	struct TStateNonstric<GlobalState<T>>
+	struct TStateNonstrict<GlobalState<T>>
 	{
 		using State = GlobalState<T>;
+		using Type = TGlobalState;
 		using Raw = T;
 	};
 
 	template<typename T>
-	using StateNonstrict = typename TStateNonstric<std::decay_t<T>>::State;
+	using StateNonstrict = typename TStateNonstrict<std::decay_t<T>>::State;
 
 	template<typename T>
-	using RawNonstrict = typename TStateNonstric<T>::Raw;
+	using RawNonstrict = typename TStateNonstrict<T>::Raw;
 
 	template<typename T>
 	struct TStateStrict
@@ -116,7 +101,8 @@ namespace ESL \
 	using StateStrict = typename TStateStrict<T>::type;
 
 	template<typename T>
-	struct IsEntityState : std::is_same<typename TStateTrait<StateNonstrict<T>>::Type, TEntityState> {};
+	struct IsEntityState : std::is_same<typename TStateNonstrict<StateNonstrict<T>>::Type, TEntityState> {};
+
 
 	class States
 	{
@@ -168,7 +154,7 @@ namespace ESL \
 		auto &CreateState() noexcept
 		{
 			using ST = State<T>;
-			auto &state = std::any_cast<ST&>(_states.insert({ typeid(ST).hash_code(), std::make_any<ST>()}).first->second);
+			auto &state = std::any_cast<ST&>(_states.insert({ typeid(ST).hash_code(), std::make_any<ST>() }).first->second);
 			_entityStates.emplace_back(&state);
 			return state;
 		}

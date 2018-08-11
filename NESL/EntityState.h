@@ -7,38 +7,6 @@
 
 namespace ESL
 {
-	template<typename T>
-	using SupportBatchCreate = decltype(&T::BatchCreate);
-
-	template<typename T>
-	using SupportBatchRemove = decltype(&T::BatchRemove);
-
-	template<typename T>
-	using SupportInstantiate = decltype(&T::Instantiate);
-
-	template<typename>
-	class SparseVec;
-
-	template<typename>
-	class Hash;
-
-	template<typename>
-	class DenseVec;
-
-	template<typename>
-	class SharedVec;
-
-	template<typename>
-	class UniqueVec;
-
-	template<typename>
-	class Vec;
-
-	template<typename>
-	class Placeholder;
-
-	using bit_vector_and2 = decltype(HBV::compose(HBV::and_op, HBV::bit_vector{}, HBV::bit_vector{}));
-
 	struct EntityStateBase
 	{
 		virtual bool Contain(index_t e) const = 0;
@@ -51,9 +19,21 @@ namespace ESL
 		virtual void BatchRemove(const HBV::bit_vector& remove) = 0;
 	};
 
+	template<typename T>
+	using SupportBatchCreate = decltype(&T::BatchCreate);
+
+	template<typename T>
+	using SupportBatchRemove = decltype(&T::BatchRemove);
+
+	template<typename T>
+	using SupportInstantiate = decltype(&T::Instantiate);
+
+	using bit_vector_and2 = decltype(HBV::compose(HBV::and_op, HBV::bit_vector{}, HBV::bit_vector{}));
+
 	template<typename T, Trace... types>
-	class EntityState : public EntityStateBase
+	class EntityStateGeneric : public EntityStateBase
 	{
+	protected:
 		HBV::bit_vector _entity;
 		T _container;
 
@@ -116,42 +96,9 @@ namespace ESL
 			}
 			_entity.merge<true>(remove);
 		}
-		
-		template<typename T>
-		EntityState(MPL::type_t<T>) noexcept : _container(10u), _entity(10u) {}
-
-		//Hack!SparseVec复用了_entity
-		template<typename T>
-		EntityState(MPL::type_t<SparseVec<T>>) noexcept : _entity(10u), _container(_entity) {}
-
-		//Hack!DenseVec复用了SparseVec
-		template<typename T>
-		EntityState(MPL::type_t<DenseVec<T>>) noexcept : _entity(10u), _container(_entity) {}
-
-		//Hack!SharedVec复用了SparseVec
-		template<typename T>
-		EntityState(MPL::type_t<SharedVec<T>>) noexcept : _entity(10u), _container(_entity) {}
-
-		//Hack!SharedVec复用了SparseVec
-		template<typename T>
-		EntityState(MPL::type_t<UniqueVec<T>>) noexcept : _entity(10u), _container(_entity) {}
 	public:
-
-		EntityState() noexcept : EntityState(MPL::type_t<T>{}) {}
-
-		template<typename = std::enable_if_t<std::is_same_v<T, UniqueVec<value_type_t>>>>
-		index_t UniqueSize() const
-		{
-			return _container.UniqueSize();
-		}
-
-		template<typename = std::enable_if_t<std::is_same_v<T, UniqueVec<value_type_t>>>>
-		const auto& SetUnique(int32_t i)
-		{
-			_container.FilterId = i;
-			//Hack!在filter状态下,返回和id无关,所以可以随便传一个数
-			return _container.Get(0);
-		}
+		template<typename... Ts>
+		EntityStateGeneric(Ts&&... args) noexcept : _entity(10u), _container(std::forward<Ts>(args)...) {}
 
 		T& Raw() noexcept
 		{
@@ -166,26 +113,7 @@ namespace ESL
 		template<Trace type>
 		decltype(auto) Available() const noexcept
 		{
-			if constexpr(std::is_same_v<T, UniqueVec<value_type_t>>)
-			{
-				static_assert(!(type & Borrow), "Borrow is not supported with UniqueVec!");
-				if (_container.FilterId >= 0)
-				{
-					if constexpr(type == Trace::Has)
-						return _container.Available();
-					else 
-						return HBV::compose(HBV::and_op, _container.Available(), ComposeTracer<type, types...>(_tracers, _entity));
-				}
-				else
-				{
-					return ComposeTracer<type, types...>(_tracers, _entity);
-				}
-			}
-			else
-			{
-				return ComposeTracer<type, types...>(_tracers, _entity);
-			}
-			
+			return ComposeTracer<type, types...>(_tracers, _entity);
 		}
 
 		template<Trace type>
@@ -240,7 +168,6 @@ namespace ESL
 			{
 				tracer.Create(e);
 			});
-			//鬼畜的VS只有这样才能编译过
 			if constexpr(MPL::is_detected<SupportInstantiate, T>{})
 			{
 				_container.Instantiate(e, proto);
@@ -265,6 +192,14 @@ namespace ESL
 			_entity.set(e, false);
 			_container.Remove(e);
 		}
+	};
+
+	template<typename T, Trace... types>
+	class EntityState : public EntityStateGeneric<T, types...>
+	{
+		using Generic = EntityStateGeneric<T, types...>;
+	public:
+		EntityState() noexcept : Generic(10u) {}
 	};
 
 	template<typename _Tp, typename _Alloc = std::allocator<_Tp>>
@@ -320,6 +255,26 @@ namespace ESL
 
 		void Remove(index_t e)
 		{
+		}
+	};
+
+	template<typename T, Trace... types>
+	class EntityState<Placeholder<T>, types...> : public EntityStateGeneric<Placeholder<T>, types...>
+	{
+		using Generic = EntityStateGeneric<SparseVec<T>, types...>;
+	public:
+		EntityState() :Generic() {}
+
+		auto &Get(index_t e) noexcept
+		{
+			static_assert(false, "don't get from placeholder");
+			return _container.Get(e);
+		}
+
+		const auto &Get(index_t e) const noexcept
+		{
+			static_assert(false, "don't get from placeholder");
+			return _container.Get(e);
 		}
 	};
 
@@ -417,7 +372,8 @@ namespace ESL
 		static constexpr index_t BucketSize = 1 << ((HBV::LayerCount - Level)*HBV::BitsPerLayer);
 
 	public:
-		SparseVec(const HBV::bit_vector& entities) : _entity(entities), _states(10u, nullptr) {}
+		SparseVec(const HBV::bit_vector& entities) 
+			: _entity(entities), _states(10u, nullptr) {}
 
 		T & Get(index_t e)
 		{
@@ -484,7 +440,6 @@ namespace ESL
 				free(_states[bucket]);
 		}
 
-		
 		void BatchRemove(const bit_vector_and2& remove)
 		{
 			if constexpr(!std::is_pod_v<T>)
@@ -496,12 +451,32 @@ namespace ESL
 					_states[bucket][index].~T();
 				});
 			}
+		}
 
-			HBV::for_each<Level - 1>(remove, [this](index_t i)
+		void AfterBatchRemove()
+		{
+			HBV::for_each<Level - 1>(_entity, [this](index_t i)
 			{
-				if (_entity.layer(Level, i) && _states[i])
+				if (!_entity.layer(Level, i) && _states[i])
 					free(_states[i]);
 			});
+		}
+	};
+
+	template<typename T, Trace... types>
+	class EntityState<SparseVec<T>, types...> : public EntityStateGeneric<SparseVec<T>, types...>
+	{
+		using Generic = EntityStateGeneric<SparseVec<T>, types...>;
+
+	public:
+		EntityState() noexcept : Generic((const HBV::bit_vector&)_entity) {}
+
+	protected:
+
+		void BatchRemove(const HBV::bit_vector& remove) noexcept
+		{
+			Generic::BatchRemove(remove);
+			_container.AfterBatchRemove();
 		}
 	};
 
@@ -558,6 +533,14 @@ namespace ESL
 		}
 	};
 
+	template<typename T, Trace... types>
+	class EntityState<DenseVec<T>, types...> : public EntityStateGeneric<DenseVec<T>, types...>
+	{
+		using Generic = EntityStateGeneric<DenseVec<T>, types...>;
+	public:
+		EntityState() noexcept : Generic((const HBV::bit_vector&)_entity) {}
+	};
+
 	template<typename T>
 	class UniqueVec
 	{
@@ -570,6 +553,14 @@ namespace ESL
 		lni::vector<Unique> _states;
 		SparseVec<index_t> _redirector;
 		
+		void CreateOn(index_t e, index_t i) noexcept
+		{
+			auto& entities = _states[i].entities;
+			if (entities.size() < e)
+				entities.grow_to(e * 3 / 2);
+			entities.set(e, true);
+			_redirector.Create(e, i);
+		}
 	public:
 		UniqueVec(const HBV::bit_vector& entities)
 			: _redirector(entities), FilterId(-1) {}
@@ -586,6 +577,14 @@ namespace ESL
 			return _states.size();
 		}
 
+		int32_t FindUnique(const T& arg) const
+		{
+			for (index_t i = 0; i < _states.size(); ++i)
+				if (&arg == _states[i].state)
+					return i;
+			return -1;
+		}
+
 		int32_t FilterId;
 
 		const HBV::bit_vector &Available() const
@@ -597,7 +596,11 @@ namespace ESL
 		{
 			Create(begin, arg);
 			index_t prototype = _redirector.Get(begin);
-			_states[prototype].refCount += end - begin;
+			auto& unique = _states[prototype];
+			unique.refCount += end - begin;
+			if (unique.entities.size() < end)
+				unique.entities.grow_to(end + 1u);
+			unique.entities.set_range(begin + 1, end, true);
 			_redirector.BatchCreate(begin + 1, end, prototype);
 		}
 
@@ -614,28 +617,17 @@ namespace ESL
 			for (index_t i = 0; i < _states.size(); ++i)
 				if (&arg == _states[i].state)
 				{
+					CreateOn(e, i);
 					_states[i].refCount++;
-					auto& entities = _states[i].entities;
-					if (entities.size() < e)
-						entities.grow_to(e * 3 / 2);
-					entities.set(e, true);
-					_redirector.Create(e, i);
 					return arg;
 				}
-			for (index_t i = 0; i < _states.size(); ++i)
-				if (nullptr == _states[i].state)
-				{
-					auto& unique = _states[i];
-					unique.refCount = 1;
-					unique.state = const_cast<T*>(&arg);
-					unique.entities.set(e, true);
-					return arg;
-				}
-			_states.emplace_back();
-			auto& unique = _states.back();
-			unique.refCount = 1;
-			unique.state = const_cast<T*>(&arg);
-			unique.entities.set(e, true);
+			index_t i = 0;
+			for (; i < _states.size(); ++i)
+				if (nullptr == _states[i].state) break;
+			if(i == _states.size()) _states.emplace_back();
+			CreateOn(e, i);
+			_states[i].refCount = 1;
+			_states[i].state = const_cast<T*>(&arg);
 			return arg;
 		}
 
@@ -653,6 +645,55 @@ namespace ESL
 			{
 				unique.entities.set(e, false);
 				_redirector.Remove(e);
+			}
+		}
+	};
+
+	template<typename T, Trace... types>
+	class EntityState<UniqueVec<T>, types...> : public EntityStateGeneric<UniqueVec<T>, types...>
+	{
+		using Generic = EntityStateGeneric<UniqueVec<T>, types...>;
+	public:
+		EntityState() noexcept : Generic((const HBV::bit_vector&)_entity) {}
+
+		index_t UniqueSize() const noexcept
+		{
+			return _container.UniqueSize();
+		}
+
+		void UniqueAsFilter(const T& value) noexcept
+		{
+			int32_t id = _container.FindUnique(value);
+			assert(id > 0);
+			_container.FilterId = id;
+		}
+
+		const auto& GetUniqueAsFilter(int32_t i) noexcept
+		{
+			_container.FilterId = i;
+			//Hack!在filter状态下,返回和id无关,所以可以随便传一个数
+			return _container.Get(0);
+		}
+
+		void ReleaseFilter() noexcept
+		{
+			_container.FilterId = -1;
+		}
+
+		template<Trace type>
+		decltype(auto) Available() const noexcept
+		{
+			static_assert(!(type & Borrow), "Borrow is not supported with UniqueVec!");
+			if (_container.FilterId >= 0)
+			{
+				if constexpr(type == Trace::Has)
+					return _container.Available();
+				else
+					return HBV::compose(HBV::and_op, _container.Available(), Generic::Available<type>());
+			}
+			else
+			{
+				return Generic::Available<type>();
 			}
 		}
 	};
@@ -740,5 +781,13 @@ namespace ESL
 			_empty.set(_redirector.Get(e), true);
 			_redirector.Remove(e);
 		}
+	};
+
+	template<typename T, Trace... types>
+	class EntityState<SharedVec<T>, types...> : public EntityStateGeneric<SharedVec<T>, types...>
+	{
+		using Generic = EntityStateGeneric<SharedVec<T>, types...>;
+	public:
+		EntityState() noexcept : Generic((const HBV::bit_vector&)_entity) {}
 	};
 }

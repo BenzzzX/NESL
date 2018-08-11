@@ -51,38 +51,43 @@ ENTITY_STATE(velocity, SharedVec, ESL::Create);
 struct location { float x, y; };
 //定义location为组件,以Vec为容器
 ENTITY_STATE(location, Vec);
+//定义mesh为组件,以UniqueVec为容器
 struct mesh {/*some data*/ };
 ENTITY_STATE(mesh, UniqueVec);
 
-constexpr std::size_t Count = 10'000'000u;
+constexpr std::size_t Count = 400'000u;
 void DrawInstanced(const mesh&, const lni::vector<location>&) {/*some code*/}
 
 void UniqueVecShowCase()
 {
 	ESL::States states;
 	ESL::LogicGraphBuilder graph(states);
+	Timer timer;
 	//注册组件
 	states.CreateState<location>();
 	states.CreateState<mesh>();
+	timer.begin("create 400k entity");
 	//创建1kw个对象,分别使用两个模型
 	states.BatchSpawnEntity(Count / 2, location{ 0,0 }, *(new mesh{})); //Mesh1
 	states.BatchSpawnEntity(Count / 2, location{ 0,0 }, *(new mesh{})); //Mesh2
-	//使用graph来安全的多线程化
+	timer.finish();
+	//使用流程图来安全的多线程化
 	graph.Schedule([]
 	(const ESL::State<location>& locs, ESL::State<mesh>& meshs)
 	{
-		//取得mesh的数量
+		//取得模型的数量
 		auto size = meshs.UniqueSize();
-		//用于数据的打包
+		//用于数据打包的缓存
 		lni::vector<location> buffer;
 		buffer.reserve(Count / 2);
 		for (auto i = 0; i < size; ++i)
 		{
-			//获得一个mesh,并设置为filter,为接下来的匹配做准备
-			const mesh& toDraw = meshs.SetUnique(i);
-			//打包所有使用这个mesh的对象的位置
+			//UniqueVec容器特殊接口
+			//获得一个模型,并设置为过滤器,为接下来的匹配做准备
+			const mesh& toDraw = meshs.GetUniqueAsFilter(i);
+			//匹配并打包所有使用这个模型的对象的位置
 			ESL::Dispatch(std::tie(locs, meshs),[&buffer]
-			(const location& location, FHas(mesh))
+			(const location& location, FHas(mesh)/**/)
 			{
 				buffer.push_back(location);
 			});
@@ -90,7 +95,16 @@ void UniqueVecShowCase()
 			DrawInstanced(toDraw, buffer);
 			buffer.clear();
 		}
+		//取消过滤器
+		meshs.ReleaseFilter();
 	}, "DrawInstancedMesh");
+	ESL::LogicGraph logicGraph;
+	graph.Compile();
+	graph.Build(logicGraph);
+	timer.begin("update 400k entity");
+	for(int i=0;i<100;i++)
+	logicGraph.Flow();
+	timer.finish();
 }
 
 void BenchMark_NESL()
@@ -149,7 +163,7 @@ int main()
 {
 	
 	std::cout << "NESL:\n";
-	BenchMark_NESL();
+	UniqueVecShowCase();
 	/*
 	std::cout << "\nLogicGraph:\n";
 	BenchMark_LogicGraph();

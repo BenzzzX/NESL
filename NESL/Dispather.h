@@ -6,7 +6,7 @@ namespace ESL
 {
 
 	template<typename T>
-	struct IsRawState : std::is_same<typename TStateTrait<StateNonstrict<T>>::Raw, T> {};
+	struct IsRawState : std::is_same<typename TStateNonstrict<StateNonstrict<T>>::Raw, T> {};
 
 	template<typename T>
 	struct IsRawEntityState : std::conjunction<std::negation<is_filter<T>>, IsRawState<T>, IsEntityState<T>> {};
@@ -119,7 +119,7 @@ namespace ESL
 			template<typename T>
 			__forceinline static T& Take(States &states)
 			{
-				using Raw = typename TStateTrait<std::decay_t<T>>::Raw;
+				using Raw = typename TStateNonstrict<std::decay_t<T>>::Raw;
 				return *states.GetState<Raw>();
 			}
 

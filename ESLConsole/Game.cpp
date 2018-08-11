@@ -11,31 +11,31 @@ int32_t map(int32_t val)
 }
 
 #pragma region Logics
-auto Logic_Draw(const ELocation& loc, const EAppearance& ap, GCanvas& canvas)
+void Logic_Draw(const ELocation& loc, const EAppearance& ap, GCanvas& canvas)
 {
 	SetConsoleCursorPosition(canvas.handle, { (SHORT)map<0,70>(loc.x), (SHORT)(29 - map<3,29>(loc.y) + 3) });
 	std::cout << ap.v;
 }
 
-auto Logic_Move(ELocation& loc, EVelocity& vel)
+void Logic_Move(ELocation& loc, EVelocity& vel)
 {
 	loc.x += vel.x;
 	loc.y += vel.y;
 }
 
-auto Logic_Clear(const ELifeTime& life, EAppearance& ap)
+void Logic_Clear(const ELifeTime& life, EAppearance& ap)
 {
 	if (life.n == 0) //清理残影图像
 		ap.v = ' ';
 }
 
-auto Logic_LifeTime(ELifeTime& life, ESL::Entity self, GEntities& entities)
+void Logic_LifeTime(ELifeTime& life, ESL::Entity self, GEntities& entities)
 {
 	if (--life.n < 0) //清理残影
 		entities.Kill(self);
 }
 
-auto Logic_Spawn(
+void Logic_Spawn(
 	const ELength& sp, 
 	const ELocation& loc, 
 	GEntities& entities,

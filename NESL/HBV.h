@@ -61,20 +61,135 @@ namespace HBV
 	constexpr flag_t EmptyNode = 0u;
 	constexpr flag_t FullNode = EmptyNode - 1u;
 
+	
+
 	class bit_vector
 	{
+		class block_vector
+		{
+			static constexpr index_t bits = BitsPerLayer * 2;
+			static constexpr index_t mask = (1 << bits) - 1;
+			lni::vector<flag_t*> _blocks;
+			index_t _size = 0;
+		public:
+			flag_t & operator[](index_t i)
+			{
+				return _blocks[i >> bits][i & mask];
+			}
+
+			flag_t operator[](index_t i) const
+			{
+				return _blocks[i >> bits][i & mask];
+			}
+
+			index_t size() const
+			{
+				return _size;
+			}
+
+			void clear()
+			{
+				for (int i = 0; i < _blocks.size(); ++i)
+					if (_blocks[i] != nullptr)
+						erase_block(i);
+			}
+
+			void resize(index_t n)
+			{
+				index_t b = n >> bits;
+				_blocks.resize(b + 1, nullptr);
+				_size = n;
+			}
+
+			void erase_block(index_t i)
+			{
+				free(_blocks[i]);
+				_blocks[i] = nullptr;
+			}
+
+			void try_erase_block(index_t i)
+			{
+				if (_blocks[i] != nullptr)
+					erase_block(i);
+			}
+
+			void add_block(index_t i)
+			{
+				_blocks[i] = (flag_t*)malloc(sizeof(flag_t) * (1 << bits));
+				memset(_blocks[i], 0, sizeof(flag_t) * (1 << bits));
+			}
+
+			void try_add_block(index_t i)
+			{
+				if (_blocks[i] == nullptr)
+					add_block(i);
+			}
+
+			void reset(index_t begin, index_t end)
+			{
+				index_t s = begin >> bits;
+				memset(_blocks[s] + (begin & mask), 0, ((end - begin) & mask) * sizeof(flag_t));
+			}
+
+			void fill(index_t begin, index_t end)
+			{
+				index_t b = end >> bits;
+				index_t s = begin >> bits;
+				for (index_t i = s; i <= b; ++i)
+					if (_blocks[i] == nullptr)
+						add_block(i);
+				for (index_t i = s + 1; i < b; ++i)
+					memset(_blocks[i], -1, (1 << bits) * sizeof(flag_t));
+				if (b > s)
+				{
+					memset(_blocks[s] + (begin & mask), -1, ((1 << bits) - (begin & mask)) * sizeof(flag_t));
+					memset(_blocks[b], -1, (end & mask) * sizeof(flag_t));
+				}
+				else
+				{
+					memset(_blocks[s] + (begin & mask), -1, ((end - begin) & mask) * sizeof(flag_t));
+				}
+			}
+
+			void resize(index_t n, flag_t value)
+			{
+				index_t b = n >> bits;
+				_blocks.resize(b + 1, nullptr);
+				index_t s = _size >> bits;
+				if (value == FullNode)
+					fill(_size, n);
+				_size = n;
+			}
+		};
+
 		index_t _end;
 		flag_t _layer0;
 		chobo::small_vector<flag_t> _layer1;
 		lni::vector<flag_t> _layer2;
-		lni::vector<flag_t> _layer3;
+		//为了减少内存消耗,这里分成block
+		block_vector _layer3;
 
 		void set_range_true(index_t begin, index_t end)
 		{
 			index_t startPos = begin;
 			index_t endPos = end - 1;
 
-#define		SET_LAYER(N) \
+#define		SET_LAYER3(N) \
+			if (index_of<N>(startPos) == index_of<N>(endPos)) \
+			{ \
+				_layer##N[index_of<N>(startPos)] |= (value_of<N>(endPos) - value_of<N>(startPos)) + value_of<N>(endPos); \
+			} \
+			else \
+			{ \
+				index_t start = index_of<N>(startPos); \
+				index_t end = index_of<N>(endPos); \
+				if (start + 1 < end) \
+					_layer##N.fill(start + 1, end); \
+				_layer##N[start] |= FullNode - value_of<N>(startPos) + 1; \
+				_layer##N[end] |= (value_of<N>(endPos) - 1) + value_of<N>(endPos); \
+			}
+
+#define		SET_LAYER12(N) \
 			if (index_of<N>(startPos) == index_of<N>(endPos)) \
 			{ \
 				_layer##N[index_of<N>(startPos)] |= (value_of<N>(endPos) - value_of<N>(startPos)) + value_of<N>(endPos); \
@@ -89,9 +204,9 @@ namespace HBV
 				_layer##N[end] |= (value_of<N>(endPos) - 1) + value_of<N>(endPos); \
 			}
 
-			SET_LAYER(3);
-			SET_LAYER(2);
-			SET_LAYER(1);
+			SET_LAYER3(3);
+			SET_LAYER12(2);
+			SET_LAYER12(1);
 
 			_layer0 |= (value_of<0>(endPos) - value_of<0>(startPos)) + value_of<0>(endPos);
 #undef		SET_LAYER
@@ -105,17 +220,18 @@ namespace HBV
 			index_t index_2 = index_of<2>(id);
 			_layer2[index_2] &= ~value_of<2>(id);
 			if (_layer2[index_2] != EmptyNode) return;
-
 			index_t index_1 = index_of<1>(id);
 			_layer1[index_1] &= ~value_of<1>(id);
 			if (_layer1[index_1] != EmptyNode) return;
+			_layer3.erase_block(index_1);
 
 			_layer0 &= ~value_of<0>(id);
 		}
 
 		void bubble_fill(index_t id)
 		{
-			index_t index_3 = index_of<3>(id);
+			index_t index_3 = index_of<3>(id); 
+			_layer3.try_add_block(index_of<1>(id));
 			if (_layer3[index_3] == EmptyNode)
 			{
 				_layer2[index_of<2>(id)] |= value_of<2>(id);
@@ -129,23 +245,7 @@ namespace HBV
 			index_t startPos = begin;
 			index_t endPos = end - 1;
 
-			if (index_of<3>(startPos) == index_of<3>(endPos))
-			{
-				_layer3[index_of<3>(startPos)] &= ~((value_of<3>(endPos) - value_of<3>(startPos)) + value_of<3>(endPos));
-				bubble_empty(startPos);
-			}
-			else
-			{
-				index_t start = index_of<3>(startPos);
-				index_t end = index_of<3>(endPos);
-				if (start + 1 < end)
-					std::fill(&_layer3[start + 1], &_layer3[end], EmptyNode);
-				_layer3[start] &= value_of<3>(startPos) - 1;
-				_layer3[end] &= FullNode - value_of<3>(endPos)*2 + 1;
-
-				bubble_empty(startPos);
-				bubble_empty(endPos);
-			}
+			
 
 			if (index_of<2>(startPos) == index_of<2>(endPos))
 			{
@@ -165,7 +265,11 @@ namespace HBV
 			if (index_of<1>(startPos) == index_of<1>(endPos))
 			{
 				_layer1[index_of<1>(startPos)] &= ~(value_of<1>(endPos) - value_of<1>(startPos) * 2);
-				bubble_empty(startPos);
+				if (_layer1[index_of<1>(startPos)] != EmptyNode)
+				{
+					_layer3.reset(index_of<3>(startPos), index_of<3>(endPos));
+					bubble_empty(startPos);
+				}
 			}
 			else
 			{
@@ -175,6 +279,24 @@ namespace HBV
 					std::fill(&_layer1[start + 1], &_layer1[end], EmptyNode);
 				_layer1[start] &= (value_of<1>(startPos) - 1) + value_of<1>(startPos);
 				_layer1[end] &= FullNode - value_of<1>(endPos) + 1;
+
+				if (_layer1[start] != EmptyNode)
+				{
+					_layer3.reset(index_of<3>(startPos), (start + 1) << (BitsPerLayer * 2) - 1);
+					bubble_empty(startPos);
+				}
+					
+				if (_layer1[end] != EmptyNode)
+				{
+					_layer3.reset(end << (BitsPerLayer * 2), index_of<3>(endPos));
+					bubble_empty(endPos);
+				}
+					
+
+				for (index_t i = start; i <= end; ++i)
+					if (_layer1[i] == EmptyNode)
+						_layer3.try_erase_block(i);
+
 			}
 
 			_layer0 &= ~((value_of<0>(endPos) - value_of<0>(startPos)) + value_of<0>(endPos));
@@ -279,7 +401,7 @@ namespace HBV
 
 		void clear() noexcept
 		{
-			std::fill(_layer3.begin(), _layer3.end(), 0u);
+			_layer3.clear();
 			std::fill(_layer2.begin(), _layer2.end(), 0u);
 			std::fill(_layer1.begin(), _layer1.end(), 0u);
 			_layer0 = 0u;
@@ -573,11 +695,11 @@ namespace HBV
 	}
 
 	template<index_t Level = 3, typename T>
-	index_t last(const T& vec) noexcept
+	int32_t last(const T& vec) noexcept
 	{
 		flag_t nodes{};
 		nodes = vec.layer0();
-		if (nodes == EmptyNode) return 0;
+		if (nodes == EmptyNode) return -1;
 		index_t prefix{};
 
 		for (int32_t level = 0;; ++level)
@@ -592,11 +714,11 @@ namespace HBV
 	}
 
 	template<index_t Level = 3, typename T>
-	index_t first(const T& vec) noexcept
+	int32_t first(const T& vec) noexcept
 	{
 		flag_t nodes{};
 		nodes = vec.layer0();
-		if (nodes == EmptyNode) return 0;
+		if (nodes == EmptyNode) return -1;
 		index_t prefix{};
 
 		for (int32_t level = 0;; ++level)
