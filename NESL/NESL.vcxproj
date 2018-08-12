@@ -183,8 +183,10 @@
     <ClInclude Include="Parallel.h" />
     <ClInclude Include="small_vector.h" />
     <ClInclude Include="States.h" />
+    <ClInclude Include="TbbGraph.h" />
     <ClInclude Include="Trace.h" />
     <ClInclude Include="vector.h" />
+    <ClInclude Include="VisualGraph.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="BenchMark.cpp" />

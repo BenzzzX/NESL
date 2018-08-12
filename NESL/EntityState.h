@@ -261,7 +261,7 @@ namespace ESL
 	template<typename T, Trace... types>
 	class EntityState<Placeholder<T>, types...> : public EntityStateGeneric<Placeholder<T>, types...>
 	{
-		using Generic = EntityStateGeneric<SparseVec<T>, types...>;
+		using Generic = EntityStateGeneric<Placeholder<T>, types...>;
 	public:
 		EntityState() :Generic() {}
 

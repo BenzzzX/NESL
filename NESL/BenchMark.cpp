@@ -1,7 +1,8 @@
 #include <chrono>
 #include <iostream>
-#include "LogicGraph.h"
+#include "TbbGraph.h"
 #include "Flatten.h"
+#include <thread>
 
 
 class TimerBlock {
@@ -58,53 +59,77 @@ ENTITY_STATE(mesh, UniqueVec);
 constexpr std::size_t Count = 400'000u;
 void DrawInstanced(const mesh&, const lni::vector<location>&) {/*some code*/}
 
-void UniqueVecShowCase()
+void GameShowCase()
 {
 	ESL::States states;
-	ESL::LogicGraphBuilder graph(states);
-	Timer timer;
-	//注册组件
-	states.CreateState<location>();
-	states.CreateState<mesh>();
-	timer.begin("create 400k entity");
-	//创建1kw个对象,分别使用两个模型
-	states.BatchSpawnEntity(Count / 2, location{ 0,0 }, *(new mesh{})); //Mesh1
-	states.BatchSpawnEntity(Count / 2, location{ 0,0 }, *(new mesh{})); //Mesh2
-	timer.finish();
-	//使用流程图来安全的多线程化
-	graph.Schedule([]
-	(const ESL::State<location>& locs, ESL::State<mesh>& meshs)
+	ESL::TbbGraph renderLogic;
+	ESL::TbbGraph gameLogic;
 	{
-		//取得模型的数量
-		auto size = meshs.UniqueSize();
-		//用于数据打包的缓存
-		lni::vector<location> buffer;
-		buffer.reserve(Count / 2);
-		for (auto i = 0; i < size; ++i)
+		//注册组件
+		states.CreateState<location>();
+		states.CreateState<mesh>();
+		//创建1kw个对象,分别使用两个模型
+		states.BatchSpawnEntity(Count / 2, location{ 0,0 }, *(new mesh{})); //Mesh1
+		states.BatchSpawnEntity(Count / 2, location{ 0,0 }, *(new mesh{})); //Mesh2
+	}
+	{
+		ESL::LogicGraph graph(states);
+		//使用流程图来安全的多线程化
+		graph.Schedule([]
+		(const ESL::State<location>& locs, ESL::State<mesh>& meshs)
 		{
-			//UniqueVec容器特殊接口
-			//获得一个模型,并设置为过滤器,为接下来的匹配做准备
-			const mesh& toDraw = meshs.GetUniqueAsFilter(i);
-			//匹配并打包所有使用这个模型的对象的位置
-			ESL::Dispatch(std::tie(locs, meshs),[&buffer]
-			(const location& location, FHas(mesh)/**/)
+			//取得模型的数量
+			auto size = meshs.UniqueSize();
+			//用于数据打包的缓存
+			lni::vector<location> buffer;
+			buffer.reserve(Count / 2);
+			for (auto i = 0; i < size; ++i)
 			{
-				buffer.push_back(location);
-			});
-			//进行绘制
-			DrawInstanced(toDraw, buffer);
-			buffer.clear();
+				//UniqueVec容器特殊接口
+				//获得一个模型,并设置为过滤器,为接下来的匹配做准备
+				const mesh& toDraw = meshs.GetUniqueAsFilter(i);
+				//匹配并打包所有使用这个模型的对象的位置
+				ESL::Dispatch(std::tie(locs, meshs), [&buffer]
+				(const location& location, FHas(mesh)/**/)
+				{
+					buffer.push_back(location);
+				});
+				//进行绘制
+				DrawInstanced(toDraw, buffer);
+				buffer.clear();
+			}
+			//取消过滤器
+			meshs.ReleaseFilter();
+		}, "DrawInstancedMesh");
+		graph.Build(renderLogic);
+	}
+	{
+		ESL::LogicGraph graph(states);
+		graph.Schedule<ESL::ParallelDispatcher>([](const velocity& vel, location& loc)
+		{
+			loc.x += vel.x;
+			loc.y += vel.y;
+		}, "Move");
+		graph.Build(gameLogic);
+	}
+	using namespace std::chrono;
+	auto time = std::chrono::high_resolution_clock::now();
+	auto deltaT = 0ms;
+	while (1)
+	{
+		auto now = std::chrono::high_resolution_clock::now();
+		deltaT += std::chrono::duration_cast<std::chrono::milliseconds>(now - time);
+		time = now;
+		
+		while (deltaT.count() > 0)
+		{
+			gameLogic.RunOnce();
+			deltaT -= 5ms;
 		}
-		//取消过滤器
-		meshs.ReleaseFilter();
-	}, "DrawInstancedMesh");
-	ESL::LogicGraph logicGraph;
-	graph.Compile();
-	graph.Build(logicGraph);
-	timer.begin("update 400k entity");
-	for(int i=0;i<100;i++)
-	logicGraph.Flow();
-	timer.finish();
+		renderLogic.RunOnce();
+		
+		std::this_thread::sleep_for(1ms);
+	}
 }
 
 void BenchMark_NESL()
@@ -139,23 +164,22 @@ void BenchMark_LogicGraph()
 
 	timer.begin("create 10m entity");
 	ESL::States states;
-	ESL::LogicGraphBuilder graph(states);
+	ESL::LogicGraph graph(states);
 	auto& locations = states.CreateState<location>();
 	auto& velocities = states.CreateState<velocity>();
 	states.BatchSpawnEntity(Count, location{ 0,0 }, velocity{ 1,1 });
 	timer.finish();
 
-	graph.ScheduleParallel([](const velocity& vel, location& loc)
+	graph.Schedule<ESL::ParallelDispatcher>([](const velocity& vel, location& loc)
 	{
 		loc.x += vel.x;
 		loc.y += vel.y;
 	}, "Move");
-	ESL::LogicGraph logicGraph;
-	graph.Compile();
-	graph.Build(logicGraph);
+	ESL::TbbGraph flowGraph;
+	graph.Build(flowGraph);
 
 	timer.begin("update 10m entity");
-	logicGraph.Flow();
+	flowGraph.RunOnce();
 	timer.finish();
 }
 
@@ -163,7 +187,7 @@ int main()
 {
 	
 	std::cout << "NESL:\n";
-	UniqueVecShowCase();
+	BenchMark_LogicGraph();
 	/*
 	std::cout << "\nLogicGraph:\n";
 	BenchMark_LogicGraph();

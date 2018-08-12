@@ -1,379 +1,282 @@
 #pragma once
 #include "States.h"
-#include "MPL.h"
 #include "Dispather.h"
 #include <unordered_set>
 #include <queue>
 #include "small_vector.h"
-#include <fstream>
 #include <iostream>
-#include <tbb\tbb.h>
 #include "Parallel.h"
 #include "Flatten.h"
 
-
 namespace ESL
 {
-	class LogicGraph
+	struct DefaultDispatcher
 	{
-		using LogicNode = tbb::flow::continue_node<tbb::flow::continue_msg>;
-		using StartNode = tbb::flow::broadcast_node<tbb::flow::continue_msg>;
-		tbb::flow::graph _logicGraph;
-		StartNode _startNode;
-		std::vector<LogicNode> _logicNodes;
-
-		friend class LogicGraphBuilder;
-
-	public:
-		LogicGraph() : _logicGraph(), _startNode(_logicGraph) {}
-		void Flow()
+		template<typename F, typename S>
+		__forceinline static void Dispatch(S states, F&& logic)
 		{
-			_startNode.try_put(tbb::flow::continue_msg{});
-			_logicGraph.wait_for_all();
-		}
-		~LogicGraph()
-		{
-
+			ESL::Dispatch(states, logic);
 		}
 	};
 
-	//TODO: Support replace scheduled logic
-	class LogicGraphBuilder
+	struct FlattenDispatcher
 	{
-		struct StateNode;
-		class LogicNode
+		template<typename F, typename S>
+		__forceinline static void Dispatch(S states, F&& logic)
 		{
-			std::function<void(void)> _dispatcher;
-			chobo::small_vector<std::size_t, 8> _reads;
-			chobo::small_vector<std::size_t, 8> _writes;
+			ESL::DispatchFlatten(states, logic);
+		}
+	};
 
-			chobo::small_vector<LogicNode*, 8> _successors;
-			std::unordered_set<LogicNode*> _manualSuccessors;
-			std::unordered_set<LogicNode*> _implicitSuccessors;
-			tbb::flow::continue_node<tbb::flow::continue_msg>* _graphNode;
-			std::string _name;
-			int32_t _refcount = 0;
-			bool _is_parallel = false;
-			friend LogicGraphBuilder;
-
-		public:
-			chobo::small_vector<std::string, 8> dependencies;
-
-			template<typename... Ts>
-			void After(Ts&&... args)
-			{
-				std::initializer_list<int32_t> _{ (dependencies.emplace_back(std::forward<Ts>(args)),0)... };
-			}
-		};
-
-		struct StateInfo
+	struct ParallelDispatcher
+	{
+		template<typename F, typename S>
+		__forceinline static void Dispatch(S states, F&& logic)
 		{
-			const char* _name;
-			bool _isGlobal;
-		};
+			ESL::DispatchParallel(states, logic);
+		}
+	};
 
-		struct StateNode
+	class LogicGraph
+	{
+		std::bitset<400> visited;
+		States &_states;
+		struct LogicNode
 		{
-			size_t _version;
-			size_t _id;
-			chobo::small_vector<LogicNode*, 8> _readers;
-			LogicNode *_owner;
-			LogicNode *_writer;
+			//后继节点
+			chobo::small_vector<LogicNode*, 20> successors;
+			chobo::small_vector<std::size_t, 8> reads;
+			chobo::small_vector<std::size_t, 8> writes;
+			bool enabled;
+			bool parallel;
+			std::string name;
+			std::size_t inRef;
+			std::size_t id;
+			std::unordered_set<LogicNode*> prefix;
+			chobo::small_vector<LogicNode*, 20> from;
+			std::function<void(void)> task;
 		};
-
-		std::unordered_map<std::size_t, StateInfo> _stateInfos;
-		lni::vector<StateNode> _stateNodes;
-
-
-		std::unordered_map<std::string, LogicNode> _logicNodes;
-		lni::vector<LogicNode*> _flattenNodes;
+		lni::vector<std::unique_ptr<LogicNode>> _graph;
+		std::unordered_map<std::string, LogicNode*> _nodeMap;
 		chobo::small_vector<LogicNode*> _entry;
-		States &states;
+		//拓扑排序展平后的图
+		lni::vector<LogicNode*> _flattenNodes;
+		bool _checked = false;
 
-		void CalculateSuccessor()
+
+		template<typename T>
+		using is_const_str = std::is_same<T, const char*>;
+
+		void CheckDependency(LogicNode* node, LogicNode* succ, bool warn)
 		{
-			for (auto &i : _logicNodes)
+			auto& prefix = succ->prefix;
+			//产生冲突却没有依赖,报错
+			if (std::find(prefix.begin(), prefix.end(), node) == prefix.end())
 			{
-				auto &node = i.second;
-				if (node.dependencies.empty())
-				{
-					_entry.push_back(&node);
-					continue;
-				}
-				for (auto& dn : node.dependencies)
-				{
-					auto it = _logicNodes.find(dn);
-					if (it == _logicNodes.end()) abort();
-					it->second._successors.push_back(&node);
-					it->second._manualSuccessors.insert(&node);
-					node._refcount += 1;
-				}
+				if(warn)
+					std::cerr << "Warning: Unmanaged dependency between [" << node->name << "] and [" << succ->name << "] due to conflict.\n";
+				succ->successors.push_back(succ);
+				prefix.insert(node);
 			}
 		}
 
-		void AddSuccessor(LogicNode* node, LogicNode* succ, std::size_t id, bool implicit = false)
+		void Flatten()
 		{
-			auto &succs = node->_successors;
-			if (std::find(succs.begin(), succs.end(), succ) == succs.end())
+#define for_in(name) for (std::size_t i = 0; i < name.size(); ++i)
+			lni::vector<std::size_t> _inRef;
+			_inRef.resize(_graph.size(), 0u);
+			_flattenNodes.clear();
+			_flattenNodes.reserve(_graph.size());
+			//迭代拓扑排序维护的队列
+			std::queue<LogicNode*> checking;
+			//入度为0的节点
+			for_in(_entry)
+				checking.push(_entry[i]);
+			//初始化拓扑排序需要的入度
+			for_in(_graph)
+				_inRef[i] = _graph[i]->inRef;
+
+			while (!checking.empty())
 			{
-				std::cerr << "Warning: Implicit dependency between [" << succ->_name.c_str() << "] and [" << node->_name.c_str() << "] due to conflict on state ["<< _stateInfos[id]._name <<"].\n";
-				succs.push_back(succ); 
-				if (implicit) node->_implicitSuccessors.insert(succ);
-			}
-			else if(!implicit)
-			{
-				node->_manualSuccessors.erase(succ);
-			}
-		}
-
-
-		void ImplicitDependency()
-		{
-			std::queue<LogicNode*> searching;
-			std::unordered_map<std::size_t, std::size_t> states;
-
-			for (auto &node : _entry)
-				searching.push(node);
-
-			std::size_t nodeSize = _stateInfos.size();
-			for (auto& logicPair : _logicNodes)
-			{
-				auto& logic = logicPair.second;
-				nodeSize += logic._writes.size();
-			}
-			_stateNodes.reserve(nodeSize);
-
-			for (auto &it : _stateInfos)
-			{
-				_stateNodes.emplace_back();
-				StateNode &state = _stateNodes.back();
-				state._version = 0;
-				state._id = it.first;
-				state._writer = nullptr;
-				state._owner = nullptr;
-				state._readers.clear();
-				states[it.first] = _stateNodes.size() - 1;
-			}
-
-			_flattenNodes.reserve(_logicNodes.size() + 1);
-			while (!searching.empty())
-			{
-				LogicNode* node = searching.front();
-
+				LogicNode* node = checking.front();
 				_flattenNodes.push_back(node);
-
-				searching.pop();
-				for (auto &succ : node->_successors)
-				{
-					succ->_refcount -= 1;
-					if (succ->_refcount <= 0)
-						searching.push(succ);
-				}
-
-				for (auto &read : node->_reads)
-				{
-					std::size_t &id = states[read];
-					StateNode &sn = _stateNodes[id];
-					sn._readers.push_back(node);
-					if(sn._writer)
-						AddSuccessor(sn._writer, node, read);
-				}
-
-				for (auto &write : node->_writes)
-				{
-					std::size_t &id = states[write];
-					StateNode &sn = _stateNodes[id];
-					for (auto &reader : sn._readers)
-						AddSuccessor(reader, node, write, true);
-					if (sn._writer)
-						AddSuccessor(sn._writer, node, write);
-					sn._owner = node;
-
-					_stateNodes.emplace_back();
-					StateNode &state = _stateNodes.back();
-					state._version = sn._version + 1;
-					state._id = sn._id;
-					state._writer = node;
-					state._owner = nullptr;
-					state._readers.clear();
-					id = _stateNodes.size() - 1;
-				}
+				checking.pop();
+				for (auto succ : node->successors)
+					if (--_inRef[succ->id] == 0)
+						checking.push(succ);
 			}
+
+			//如果入度依然不为0的节点,处于环中
+			for_in(_inRef)
+				if (_inRef[i] != 0)
+					std::cerr << "Loop dependency found, include [" << _graph[i]->name << "].\n";
+#undef for_in
 		}
 
-		void LoopDependency()
+		//检查,报错并尝试消除模棱两可的逻辑依赖
+		void CheckGraph(bool fix = false)
 		{
-			for (auto& node : _logicNodes)
+			if (!fix) Flatten();
+			//每个state的当前的共享(读取)逻辑
+			std::unordered_map<std::size_t, chobo::small_vector<LogicNode*, 20>> readers;
+			//每个state的当前的占有(写入)逻辑
+			std::unordered_map<std::size_t, LogicNode*> writer;
+			for(auto node : _flattenNodes)
 			{
-				if (node.second._refcount > 0)
+				for(auto read : node->reads)
 				{
-					std::cerr << "Loop dependency with " << node.second._name.c_str() << ".\n";
+					//参与共享,并依赖于上一个独占
+					readers[read].push_back(node);
+					if (auto iter = writer.find(read); iter != writer.end())
+						CheckDependency(iter->second, node, !fix);
+				}
+
+				for(auto write : node->writes)
+				{
+					//依赖于之前的共享或上一个独占,并进行独占
+					if (auto iter = readers.find(write); iter != readers.end() && !iter->second.empty())
+					{
+						auto& reader = iter->second;
+						for(auto r : reader)
+							CheckDependency(r, node, !fix);
+						reader.clear();
+					}
+					else if (auto iter = writer.find(write); iter != writer.end())
+						CheckDependency(iter->second, node, !fix);
+					writer[write] = node;
 				}
 			}
+			_checked = true;
+
 		}
 
-		template<typename S>
-		LogicNode& InitNode(LogicNode& node, const S& fetchedStates)
+		void TryAddNext(std::string name, LogicNode* next)
 		{
-			node._reads.clear();
-			node._writes.clear();
-			MPL::for_tuple(fetchedStates, [&node, this](auto &wrapper)
+			auto iter = _nodeMap.find(name);
+			assert(iter == _nodeMap.end());
+			iter->second->successors.push_back(next);
+			for(auto i : iter->second->prefix)
+				next->prefix.insert(i);
+			next->prefix.insert(iter->second);
+			next->from.push_back(iter->second);
+		}
+
+		template<typename T>
+		void BuildGraph(T& graph);
+	public:
+		LogicGraph(States& s) : _states(s) {}
+
+		//安排逻辑,请注意依赖关系
+		template<typename Dispatcher = DefaultDispatcher, typename F, typename... Ts>
+		void Schedule(F&& f, std::string name, Ts... dependencies)
+		{
+			_checked = false;
+			auto fetchedStates = FetchFor(_states, f);
+			_graph.emplace_back(std::make_unique<LogicNode>());
+			auto& node = _graph.back();
+			if constexpr(sizeof...(Ts) == 0)
+				_entry.emplace_back(node.get());
+			node->inRef = sizeof...(Ts);
+			node->id = _graph.size() - 1;
+			node->name = name;
+			node->enabled = true;
+			node->task = [fetchedStates, f = std::forward<F>(f), &node]()
 			{
+				if(node->enabled)
+					Dispatcher::Dispatch(fetchedStates, f);
+			};
+			MPL::for_tuple(fetchedStates, [&node](auto &wrapper)
+			{
+
 				using type = decltype(wrapper);
 				using intern = typename TStateNonstrict<std::decay_t<type>>::Raw;
 				std::size_t id = typeid(type).hash_code();
 
-				if (_stateInfos.find(id) == _stateInfos.end())
-				{
-					auto& stateInfo = _stateInfos[id];
-					stateInfo._name = typeid(intern).name() + 8;
-					stateInfo._isGlobal = std::is_same_v<State<intern>, GlobalState<intern>>;
-				}
-
 				if constexpr(MPL::is_const_v<type>)
 				{
 					//Hack!跳过Entities的读检测
-					if(!std::is_same_v<type, const GlobalState<Entities>&>)
-						node._reads.push_back(id);
+					if (!std::is_same_v<type, const GlobalState<Entities>&>)
+						node->reads.push_back(id);
 				}
 				else
-					node._writes.push_back(id);
+					node->writes.push_back(id);
 			});
-			return node;
+
+			_nodeMap[std::move(name)] = node.get();
+			std::initializer_list<int> _ = { (TryAddNext(std::move(dependencies), node.get()), 0)... };
 		}
 
-	public:
-		LogicGraphBuilder(States& states) : states(states) {}
-
-		template<typename F>
-		LogicNode& Schedule(F&& f, std::string name)
+		//用来手动修正关系
+		template<typename... Ts>
+		void AddDependencies(std::string name, Ts... dependencies)
 		{
-			auto fetchedStates = FetchFor(states, f);
-			LogicNode& node = _logicNodes[name];
-			node._name = name;
-			node._dispatcher = [fetchedStates, f = std::forward<F>(f)]()
-			{
-				Dispatch(fetchedStates, f);
-			};
-			return InitNode(node, fetchedStates);
+			auto iter = _nodeMap.find(name);
+			assert(iter == _nodeMap.end());
+			std::initializer_list<int> _ = { (TryAddNext(std::move(dependencies), iter->second), 0)... };
 		}
 
-		template<typename F>
-		LogicNode& ScheduleParallel(F&& f, std::string name)
+		//删除已安排的逻辑,注意!你可能需要手动修正大量相关的关系
+		void Unschedule(std::string name)
 		{
-			auto fetchedStates = FetchFor(states, f);
-			LogicNode& node = _logicNodes[name];
-			node._name = name;
-			node._is_parallel = true;
-			node._dispatcher = [fetchedStates, f = std::forward<F>(f)]()
+			if (!_checked) CheckGraph();
+			auto iter = _nodeMap.find(name);
+			assert(iter == _nodeMap.end());
+			auto& node = iter->second;
+			//从前后节点中移除自己
+			for (auto a : node->successors)
 			{
-				DispatchParallel(fetchedStates, f);
-			};
-			return InitNode(node, fetchedStates);
-		}
-
-		template<typename F>
-		LogicNode& ScheduleFlatten(F&& f, std::string name)
-		{
-			auto fetchedStates = FetchFor(states, f);
-			LogicNode& node = _logicNodes[name];
-			node._name = name;
-			node._dispatcher = [fetchedStates, f = std::forward<F>(f)]()
-			{
-				DispatchFlatten(fetchedStates, f);
-			};
-			return InitNode(node, fetchedStates);
-		}
-
-		void Compile()
-		{
-			CalculateSuccessor();
-			ImplicitDependency();
-			LoopDependency();
-		}
-
-		void Build(LogicGraph& graph)
-		{
-			std::size_t size = _flattenNodes.size();
-			graph._logicNodes.reserve(size + 1);
-			for (long long i = size - 1; i >= 0; i--)
-			{
-				auto& node = _flattenNodes[i];
-				graph._logicNodes.emplace_back(graph._logicGraph, [f = std::move(node->_dispatcher)](tbb::flow::continue_msg) { f(); });
-				node->_graphNode = &graph._logicNodes[size-i-1];
-				for (auto &succ : node->_successors)
-					tbb::flow::make_edge(*node->_graphNode, *succ->_graphNode);
-			}
-			for (auto &node : _entry)
-			{
-				tbb::flow::make_edge(graph._startNode, *node->_graphNode);
-			}
-		}
-
-		void ExportGraphviz(const std::string& path)
-		{
-			std::ofstream stream(path);
-			stream << "digraph framegraph \n{\n";
-
-			stream << "rankdir = LR\n";
-			stream << "bgcolor = black\n\n";
-			stream << "node [shape=rectangle, fontname=\"helvetica\", fontsize=12, fontcolor=white]\n\n";
-
-			for (auto& logicPair : _logicNodes)
-			{
-				auto& logic = logicPair.second;
-				stream << "\"" << logic._name << "\" [label=\"" << logic._name << "\", style=bold, color=darkorange]\n";
-			}
-			stream << "\n";
-
-			for (auto& logicPair : _logicNodes)
-			{
-				auto& logic = logicPair.second;
-				for (auto& l : logic._manualSuccessors)
+				//重新计算前缀
+				a->prefix.clear();
+				for (auto p : a->from)
 				{
-					stream << "\"" << logic._name << "\" -> { ";
-					stream << "\"" << l->_name << "\" ";
-					stream << "} [color=white]\n";
+					for (auto i : p->prefix)
+						a->prefix.insert(i);
+					a->prefix.insert(p);
 				}
-
-				for (auto& l : logic._implicitSuccessors)
-				{
-					stream << "\"" << logic._name << "\" -> { ";
-					stream << "\"" << l->_name << "\" ";
-					stream << "} [color=yellow3]\n";
-				}
+				auto& from = a->from;
+				from.erase(std::remove(from.begin(), from.end(), node), from.end());
 			}
-
-			stream << "\n";
-
-			for (auto& state : _stateNodes)
+			for (auto a : node->from)
 			{
-				if (state._readers.empty() && state._owner == nullptr) continue;
-				if (state._id == typeid(GlobalState<Entities>).hash_code()) continue;
-				const StateInfo &info = _stateInfos[state._id];
-				const char* name = info._name;
-				stream << "\"" << name << state._version << "\" [label=\"" << name << "\", style=bold, color= " << (info._isGlobal ? "skyblue" : "steelblue") << "]\n";
-
-				stream << "\"" << name << state._version << "\" -> { ";
-				for (auto& logic : state._readers)
-					stream << "\"" << logic->_name << "\" ";
-				stream << "} [color=seagreen]\n";
-
-				if (state._owner)
-				{
-					stream << "\"" << name << state._version << "\" -> { ";
-					stream << "\"" << state._owner->_name << "\" ";
-					stream << "} [color=firebrick]\n";
-				}
-
-				if (state._writer)
-				{
-					stream << "\"" << state._writer->_name << "\" -> { ";
-					stream << "\"" << name << state._version << "\" ";
-					stream << "} [color=firebrick]\n";
-				}
+				auto& succs = a->successors;
+				succs.erase(std::remove(succs.begin(), succs.end(), node), succs.end());
 			}
-			stream << "}";
+			_flattenNodes.erase(std::remove(_flattenNodes.begin(), _flattenNodes.end(), node), _flattenNodes.end());
+			//删除节点
+			auto id = node->id;
+			_graph[id].swap(_graph[_graph.size() - 1]);
+			_graph[id]->id = id;
+			_graph.pop_back();
+			//尝试进行修补
+			CheckGraph(true);
+		}
+
+		//暂时关闭逻辑,注意!不是删除,逻辑仍然存在
+		void Disable(std::string name)
+		{ 
+			auto iter = _nodeMap.find(name);
+			assert(iter == _nodeMap.end());
+			iter->second->enabled = false;
+		}
+
+		//重新开启逻辑
+		void Enable(std::string name)
+		{
+			auto iter = _nodeMap.find(name);
+			assert(iter == _nodeMap.end());
+			iter->second->enabled = true;
+		}
+
+		void Check()
+		{
+			if (!_checked) CheckGraph();
+		}
+
+		template<typename T>
+		void Build(T& graph)
+		{
+			if (!_checked) CheckGraph();
+			BuildGraph(graph);
 		}
 	};
 }

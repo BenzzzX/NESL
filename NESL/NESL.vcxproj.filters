@@ -33,9 +33,6 @@
     <ClInclude Include="States.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="LogicGraph.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="GlobalState.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -55,6 +52,15 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="Trace.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="TbbGraph.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="VisualGraph.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="LogicGraph.h">
       <Filter>头文件</Filter>
     </ClInclude>
   </ItemGroup>
