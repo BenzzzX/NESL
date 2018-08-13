@@ -54,7 +54,7 @@ void Logic_Spawn(
 }
 #pragma endregion
 
-void Register(ESL::States& st, ESL::LogicGraphBuilder& graph)
+void Register(ESL::States& st, ESL::LogicGraph& graph)
 {
 	auto e = st.SpawnEntity();
 	st.CreateState<EVelocity>().Create(e, { 1,0 });
@@ -65,10 +65,10 @@ void Register(ESL::States& st, ESL::LogicGraphBuilder& graph)
 	st.CreateState<GCanvas>(GetStdHandle(STD_OUTPUT_HANDLE));
 
 	graph.Schedule(Logic_Draw, "Draw");
-	graph.Schedule(Logic_Move, "Move").After("Draw", "Spawn");
-	graph.Schedule(Logic_LifeTime, "LifeTime").After("Spawn");
-	graph.Schedule(Logic_Clear, "Clear").After("LifeTime");
-	graph.Schedule(Logic_Spawn, "Spawn").After("Draw");
+	graph.Schedule(Logic_Spawn, "Spawn", "Draw");
+	graph.Schedule(Logic_Move, "Move", "Draw", "Spawn");
+	graph.Schedule(Logic_LifeTime, "LifeTime", "Spawn");
+	graph.Schedule(Logic_Clear, "Clear", "LifeTime");
 }
 
 void HideCursor()
@@ -80,7 +80,7 @@ void HideCursor()
 	SetConsoleCursorInfo(handle, &CursorInfo);//设置控制台光标状态
 }
 
-void RegisterPlugins(ESL::States& st, ESL::LogicGraphBuilder& graphBuilder)
+void RegisterPlugins(ESL::States& st, ESL::LogicGraph& graphBuilder)
 {
 	char findDir[] = "plugins/*.dll";
 	char pluginDir[100] = "plugins/";
@@ -94,7 +94,7 @@ void RegisterPlugins(ESL::States& st, ESL::LogicGraphBuilder& graphBuilder)
 		strcpy(pluginDir + 8, findData.name);
 		std::cout << "    " << pluginDir << "\n";
 		HMODULE hModule = LoadLibrary(pluginDir);
-		auto reg = reinterpret_cast<void(*)(ESL::States&, ESL::LogicGraphBuilder&)>(GetProcAddress(hModule, "Register"));
+		auto reg = reinterpret_cast<void(*)(ESL::States&, ESL::LogicGraph&)>(GetProcAddress(hModule, "Register"));
 		reg(st, graphBuilder);
 		//FreeLibrary(hModule);
 	} while (_findnext(handle, &findData) == 0);
@@ -105,29 +105,25 @@ void RegisterPlugins(ESL::States& st, ESL::LogicGraphBuilder& graphBuilder)
 int main()
 {
 	HideCursor();
-#pragma region ESL
 	ESL::States st;
-	ESL::LogicGraphBuilder graph(st);
+	ESL::LogicGraph graph(st);
 
 	Register(st, graph);
 	RegisterPlugins(st, graph);
 
-	graph.Compile();
-	graph.ExportGraphviz("test.gv");
-	ESL::LogicGraph logicGraph;
-	graph.Build(logicGraph);
-#pragma endregion
+	ESL::VisualGraph visualGraph;
+	graph.Build(visualGraph);
+	visualGraph.SaveTo("test.gv");
 
-#pragma region GameLoop
 
+	ESL::TbbGraph flowGraph;
+	graph.Build(flowGraph);
 	while (true) {
 		using namespace std::chrono;
-		logicGraph.Flow();
+		flowGraph.RunOnce();
 		st.Tick();
 		std::this_thread::sleep_for(1000ms);
 	}
-
-#pragma endregion
 
 	return 0;
 }

@@ -179,7 +179,6 @@
     <ClInclude Include="HBV.h" />
     <ClInclude Include="LogicGraph.h" />
     <ClInclude Include="MPL.h" />
-    <ClInclude Include="NESL.h" />
     <ClInclude Include="Parallel.h" />
     <ClInclude Include="small_vector.h" />
     <ClInclude Include="States.h" />

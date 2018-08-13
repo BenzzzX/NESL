@@ -463,7 +463,8 @@ namespace HBV
 		bool contain(index_t id) const noexcept
 		{
 			index_t index_3 = index_of<3>(id);
-			return (index_3 < _layer3.size()) && (_layer3[index_3] & value_of<3>(id));
+			index_t index_1 = index_of<1>(id);
+			return (index_3 < _layer3.size()) && (_layer1[index_1] > 0) && (_layer3[index_3] & value_of<3>(id));
 		}
 
 		flag_t layer(index_t level, index_t id) const noexcept

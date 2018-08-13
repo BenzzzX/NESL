@@ -39,14 +39,13 @@ namespace ESL
 
 	class LogicGraph
 	{
-		std::bitset<400> visited;
 		States &_states;
 		struct LogicNode
 		{
 			//后继节点
 			chobo::small_vector<LogicNode*, 20> successors;
-			chobo::small_vector<std::size_t, 8> reads;
-			chobo::small_vector<std::size_t, 8> writes;
+			chobo::small_vector<std::size_t, 15> reads;
+			chobo::small_vector<std::size_t, 15> writes;
 			bool enabled;
 			bool parallel;
 			std::string name;
@@ -56,7 +55,7 @@ namespace ESL
 			chobo::small_vector<LogicNode*, 20> from;
 			std::function<void(void)> task;
 		};
-		lni::vector<std::unique_ptr<LogicNode>> _graph;
+		std::vector<std::unique_ptr<LogicNode>> _graph;
 		std::unordered_map<std::string, LogicNode*> _nodeMap;
 		chobo::small_vector<LogicNode*> _entry;
 		//拓扑排序展平后的图
@@ -74,7 +73,7 @@ namespace ESL
 			if (std::find(prefix.begin(), prefix.end(), node) == prefix.end())
 			{
 				if(warn)
-					std::cerr << "Warning: Unmanaged dependency between [" << node->name << "] and [" << succ->name << "] due to conflict.\n";
+					std::cerr << "Warning: Unsolved dependency between [" << node->name << "] and [" << succ->name << "] due to conflict.\n";
 				succ->successors.push_back(succ);
 				prefix.insert(node);
 			}
@@ -153,7 +152,7 @@ namespace ESL
 		void TryAddNext(std::string name, LogicNode* next)
 		{
 			auto iter = _nodeMap.find(name);
-			assert(iter == _nodeMap.end());
+			assert(iter != _nodeMap.end());
 			iter->second->successors.push_back(next);
 			for(auto i : iter->second->prefix)
 				next->prefix.insert(i);
@@ -180,7 +179,7 @@ namespace ESL
 			node->id = _graph.size() - 1;
 			node->name = name;
 			node->enabled = true;
-			node->task = [fetchedStates, f = std::forward<F>(f), &node]()
+			node->task = [fetchedStates, f = std::forward<F>(f), node = node.get()]()
 			{
 				if(node->enabled)
 					Dispatcher::Dispatch(fetchedStates, f);
@@ -211,7 +210,7 @@ namespace ESL
 		void AddDependencies(std::string name, Ts... dependencies)
 		{
 			auto iter = _nodeMap.find(name);
-			assert(iter == _nodeMap.end());
+			assert(iter != _nodeMap.end());
 			std::initializer_list<int> _ = { (TryAddNext(std::move(dependencies), iter->second), 0)... };
 		}
 
@@ -220,7 +219,7 @@ namespace ESL
 		{
 			if (!_checked) CheckGraph();
 			auto iter = _nodeMap.find(name);
-			assert(iter == _nodeMap.end());
+			assert(iter != _nodeMap.end());
 			auto& node = iter->second;
 			//从前后节点中移除自己
 			for (auto a : node->successors)
@@ -255,7 +254,7 @@ namespace ESL
 		void Disable(std::string name)
 		{ 
 			auto iter = _nodeMap.find(name);
-			assert(iter == _nodeMap.end());
+			assert(iter != _nodeMap.end());
 			iter->second->enabled = false;
 		}
 
@@ -263,7 +262,7 @@ namespace ESL
 		void Enable(std::string name)
 		{
 			auto iter = _nodeMap.find(name);
-			assert(iter == _nodeMap.end());
+			assert(iter != _nodeMap.end());
 			iter->second->enabled = true;
 		}
 

@@ -1,6 +1,7 @@
 #pragma once
 
-#include "../NESL/NESL.h"
+#include "../NESL/TbbGraph.h"
+#include "../NESL/VisualGraph.h"
 #include <Windows.h>
 
 

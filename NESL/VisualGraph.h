@@ -7,20 +7,21 @@ namespace ESL
 {
 	class VisualGraph
 	{
-		std::string graphvizCode;
+		std::stringstream graphvizCode;
 		friend class LogicGraph;
 	public:
 		void SaveTo(std::string url)
 		{
 			std::ofstream stream(url);
-			stream << graphvizCode;
+			stream << graphvizCode.str();
+			stream.close();
 		}
 	};
 
 	template<>
 	void LogicGraph::BuildGraph<VisualGraph>(VisualGraph& graph)
 	{
-		std::stringstream stream{ graph.graphvizCode };
+		std::stringstream& stream{ graph.graphvizCode };
 		stream << "digraph framegraph \n{\n";
 
 		stream << "rankdir = LR\n";
